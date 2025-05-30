@@ -21,12 +21,12 @@ A raspberry pi 0 2 w humidity and temperature sensor
 1. install imager
 1. select the Raspberry Pi OS (64-bit) image
 1. click edit settings
-    1. set hostname: `rpi20w`
-    1. username: `alpha`
-    1. password
-    1. WLAN: asus 2G
-    1. locale
-    1. enable the SSH service: `rpi20w.local`
+   1. set hostname: `rpi20w`
+   1. username: `alpha`
+   1. password
+   1. WLAN: asus 2G
+   1. locale
+   1. enable the SSH service: `rpi20w.local`
 
 References
 
@@ -51,6 +51,17 @@ References
 1. run `nvm install 16`
 
 > Using the LTS v16 here because onoff only supports v16.
+
+### Publishing the web-api
+
+1. `cd web-api`
+1. `npm install`
+1. `npm run build`
+1. copy the contents of `web-api/dist/` into `~/web-api/` on the pi
+1. SSH into the pi (i.e. `pi@rpi20w.local`)
+1. `cd ~/web-api/`
+1. `npm install --production`
+1. `node index.js`
 
 ### Connecting the sensor
 
