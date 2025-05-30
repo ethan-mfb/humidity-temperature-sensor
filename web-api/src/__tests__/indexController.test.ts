@@ -1,5 +1,6 @@
 import { indexRequestHandler } from "../indexController.js";
 import type { Request, Response } from "express";
+import { describe, it, expect, vi } from "vitest";
 
 describe("indexRequestHandler", () => {
   it("responds with the correct message", () => {
@@ -11,7 +12,7 @@ describe("indexRequestHandler", () => {
       undefined,
       Record<string, any>
     >;
-    const jsonMock = jest.fn();
+    const jsonMock = vi.fn();
     const res = { json: jsonMock } as unknown as Response<
       { message: string },
       Record<string, any>
