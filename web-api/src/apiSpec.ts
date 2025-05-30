@@ -1,6 +1,6 @@
-import type { OpenAPIObject } from "openapi3-ts/dist/oas31";
-import { indexRequestPath } from "./indexController";
-import { version } from "./version";
+import type { OpenAPIObject } from "openapi3-ts/oas31";
+import { indexRequestPath } from "./indexController.js";
+import { version } from "./version.js";
 
 export const openApiSpec: OpenAPIObject = {
   openapi: "3.1.0",

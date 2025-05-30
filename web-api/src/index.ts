@@ -1,7 +1,7 @@
 import express from "express";
 import swaggerUi from "swagger-ui-express";
-import { openApiSpec } from "./apiSpec";
-import { indexRequestHandler, indexRequestPath } from "./indexController";
+import { openApiSpec } from "./apiSpec.js";
+import { indexRequestHandler, indexRequestPath } from "./indexController.js";
 
 const app = express();
 const port = process.env.PORT || 3000;
