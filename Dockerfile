@@ -2,7 +2,7 @@ FROM ubuntu:latest
 
 # Install dependencies
 RUN apt-get update && \
-    apt-get install -y curl git sudo python3 && \
+    apt-get install -y curl git sudo python3 build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 # Create dev user with passwordless sudo and home directory
