@@ -6,13 +6,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite-node src/index.ts",
-    "build": "vite build && cp package.json dist/ && cp package-lock.json dist/",
+    "build": "vite build",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "typecheck": "tsc --noEmit",
     "check-formatting": "prettier --check \"src/**/*.{ts,js,json,md}\"",
-    "fix-formatting": "prettier --write \"src/**/*.{ts,js,json,md}\""
+    "fix-formatting": "prettier --write \"src/**/*.{ts,js,json,md}\"",
+    "package": "npm run build && mkdir publish && npm pack --pack-destination publish"
   },
   "author": "Ethan Lemke",
   "license": "MIT",
@@ -33,5 +34,11 @@
     "vite": "6.3.5",
     "vite-node": "3.1.3",
     "vitest": "3.1.4"
-  }
+  },
+  "files": [
+    "README.md",
+    "package.json",
+    "package-lock.json",
+    "dist/**"
+  ]
 }

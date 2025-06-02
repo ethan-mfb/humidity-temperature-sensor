@@ -10,19 +10,14 @@ export default defineConfig({
       fileName: () => "index.js",
     },
     rollupOptions: {
-      external: [
-        'express',
-        'swagger-ui-express',
-        'onoff',
-        'openapi3-ts',
-      ],
+      external: ["express", "swagger-ui-express", "onoff", "openapi3-ts"],
       output: {
         entryFileNames: "index.js",
       },
     },
     target: "node16",
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false,
     minify: false,
   },
   resolve: {

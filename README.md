@@ -56,8 +56,9 @@ References
 
 1. `cd web-api`
 1. `npm install`
-1. `npm run build`
-1. copy the contents of `web-api/dist/` into `~/web-api/` on the pi
+1. `npm run package`
+1. copy the published package from `publish/` to the pi
+1. unzip the contents of the published package to `~/web-api/`
 1. SSH into the pi (i.e. `pi@rpi20w.local`)
 1. `cd ~/web-api/`
 1. `npm install --production`
