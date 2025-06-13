@@ -79,6 +79,7 @@ References
 1. `cd ~/web-api/`
 1. `npm install --omit=dev`
 1. `node index.js`
+1. navigate to `http://rpi20w.local:3000/`
 
 ### Connecting the sensor
 
