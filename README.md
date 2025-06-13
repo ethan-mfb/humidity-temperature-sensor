@@ -39,6 +39,22 @@ References
 1. run `sudo apt update` and `sudo apt upgrade`
 1. run `sudo apt install apache2 -y`
 1. verify by navigating to <http://rpi20w.local/>
+1. configure apache as a reverse proxy
+   1. `sudo a2enmod proxy`
+   1. `sudo a2enmod proxy_http`
+   1. `sudo systemctl restart apache2`
+1. add the site configuration file for web-api to `/etc/apache2/sites-available/000-default.conf`
+
+   ```conf
+   <VirtualHost *:80>
+      # ...existing config...
+      # use the port web-api is setup for
+      ProxyPass / http://localhost:3000/
+      ProxyPassReverse / http://localhost:3000/
+   </VirtualHost>
+   ```
+
+1. `sudo systemctl restart apache2`
 
 References
 
@@ -57,11 +73,11 @@ References
 1. `cd web-api`
 1. `npm install`
 1. `npm run package`
-1. copy the published package from `publish/` to the pi
-1. unzip the contents of the published package to `~/web-api/`
-1. SSH into the pi (i.e. `pi@rpi20w.local`)
+1. unzip the contents of the web api zip in the `publish/` directory
+1. transfer it to `~/web-api/` on the pi
+1. SSH into the alpha (i.e. `alpha@rpi20w.local`)
 1. `cd ~/web-api/`
-1. `npm install --production`
+1. `npm install --omit=dev`
 1. `node index.js`
 
 ### Connecting the sensor
