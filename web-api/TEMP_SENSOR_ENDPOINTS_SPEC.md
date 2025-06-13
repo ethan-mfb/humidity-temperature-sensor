@@ -1,6 +1,13 @@
 # Temp Sensor HTTP REST Endpoint Specification
 
+## Overview
+
 These endpoints provide HTTP and Server-Sent Events (SSE) interfaces for accessing temperature and humidity data from the AM2302 (DHT22) sensor via the Temp Sensor Service. They enable clients to start/stop polling, check service status, and receive real-time sensor updates. All endpoints are implemented using strong TypeScript typing, functional patterns, and event-driven architecture, and are decoupled from hardware details.
+
+## Relationship to Temp Sensor Service
+
+- Uses the Temp Sensor Service API for all sensor data and lifecycle management.
+- Surfaces errors and status changes to clients via HTTP responses and SSE events.
 
 ## Responsibilities
 
@@ -12,8 +19,6 @@ These endpoints provide HTTP and Server-Sent Events (SSE) interfaces for accessi
   - Stream current temperature and humidity readings to clients
   - Allow configuration of the data push interval
 - Ensure all operations are safe (no race conditions, double-start/stop, etc.) and secure (input validation, error handling)
-- Use the Temp Sensor Service for all sensor data and lifecycle management
-- Surface errors and status changes to clients via HTTP responses and SSE events
 - Place all endpoint logic in a dedicated controller module
 
 ## Architecture & Data Flow
@@ -31,12 +36,14 @@ These endpoints provide HTTP and Server-Sent Events (SSE) interfaces for accessi
 
 - **Description:** Returns the current status of the polling service (e.g., running, stopped, last error).
 - **Response:**
+
   ```json
   {
     "status": "running" | "stopped",
     "lastError"?: { "type": string, "message": string }
   }
   ```
+
 - **Errors:** 500 on internal error
 
 #### POST /api/temp-sensor/start
@@ -61,7 +68,7 @@ These endpoints provide HTTP and Server-Sent Events (SSE) interfaces for accessi
   - `error`: `{ type: string, message: string }` (e.g., checksum, signal, range)
 - **Errors:** Connection closes on unrecoverable error
 
-## TypeScript Types
+## TypeScript API
 
 ```typescript
 export type TempSensorStatus = {

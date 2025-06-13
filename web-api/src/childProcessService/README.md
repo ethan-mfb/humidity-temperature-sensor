@@ -1,6 +1,8 @@
 # Child Process Service
 
-The Child Process Service is responsible for managing the lifecycle and communication of child processes within the web API. It abstracts process management, providing a declarative, event-driven interface for starting, stopping, and interacting with child processes. This service is designed to fit into the overall event sourcing and Redux-style data flow of the application.
+## Overview
+
+The Child Process Service manages the lifecycle and communication of child processes within the web API. It provides a declarative, event-driven interface for starting, stopping, and interacting with child processes, and is designed to fit into the overall event sourcing and Redux-style data flow of the application.
 
 ## Responsibilities
 
@@ -22,6 +24,11 @@ The Child Process Service is responsible for managing the lifecycle and communic
 - All errors are captured and dispatched as error events.
 - The service ensures child processes are properly cleaned up on stop or error.
 - Provides hooks for consumers to listen for process exit, error, and custom message events.
+
+## Integration
+
+- Used by the GPIO Pin Service to manage polling child processes.
+- Loosely coupled: interacts only via public APIs and event contracts.
 
 ## TypeScript API
 

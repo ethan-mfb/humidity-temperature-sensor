@@ -1,6 +1,8 @@
 # GPIO Pin Polling Service
 
-A service that lives in a child process of the web-api parent process. It is managed by the GPIO Pin Service (see ../gpioPinService/README.md).
+## Overview
+
+A service that lives in a child process of the web-api parent process. It is managed by the GPIO Pin Service and is responsible for low-level GPIO polling and event emission.
 
 ## Relationship to GPIO Pin Service
 
@@ -18,6 +20,12 @@ A service that lives in a child process of the web-api parent process. It is man
 - Exit immediately if the parent process disconnects.
 - Handle rapid start/stop command sequences safely.
 
+## Architecture & Data Flow
+
+- Follows functional programming principles and event-driven design.
+- All communication is via IPC using shared, strongly-typed message contracts.
+- Loosely coupled: interacts only with the GPIO Pin Service via public API.
+
 ## TypeScript API
 
 ```typescript
@@ -31,7 +39,6 @@ export type GpioPollingMessage =
   | { type: "error"; reason: string }
   | { type: "status"; status: "started" | "stopped" | "exited"; pin?: number };
 
-// Child process main handler
 export function handleParentMessage(
   message: GpioPollingCommand,
   send: (msg: GpioPollingMessage) => void,
