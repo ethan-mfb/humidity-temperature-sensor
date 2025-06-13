@@ -19,10 +19,10 @@
   "author": "Ethan Lemke",
   "license": "MIT",
   "dependencies": {
-    "express": "5.1.0",
+    "express": "4.18.2",
     "onoff": "6.0.3",
-    "openapi3-ts": "4.4.0",
-    "swagger-ui-express": "5.0.1"
+    "openapi3-ts": "3.2.0",
+    "swagger-ui-express": "4.6.3"
   },
   "devDependencies": {
     "@types/express": "5.0.1",
