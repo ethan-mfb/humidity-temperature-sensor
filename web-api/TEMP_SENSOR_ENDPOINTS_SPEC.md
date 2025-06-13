@@ -101,3 +101,7 @@ export type TempSensorError =
 - All endpoints validate input and enforce idempotency.
 - No direct hardware access is exposed to clients.
 - All operations are logged and auditable.
+
+---
+
+For further details, see the Temp Sensor Service and GPIO Pin Service specifications.

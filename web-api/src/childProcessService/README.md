@@ -64,3 +64,7 @@ export function onChildProcessEvent(
   listener: (event: ChildProcessEvent) => void,
 ): void;
 ```
+
+---
+
+For further details, see the GPIO Pin Service specification.

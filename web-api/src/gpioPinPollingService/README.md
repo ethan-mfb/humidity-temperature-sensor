@@ -44,3 +44,7 @@ export function handleParentMessage(
   send: (msg: GpioPollingMessage) => void,
 ): void;
 ```
+
+---
+
+For further details, see the GPIO Pin Service specification.

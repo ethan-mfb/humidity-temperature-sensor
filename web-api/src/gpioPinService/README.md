@@ -48,3 +48,7 @@ export type GpioPinService = {
   onStatus(callback: (status: { status: string; pin?: number }) => void): void;
 };
 ```
+
+---
+
+For further details, see the GPIO Pin Polling Service specification.

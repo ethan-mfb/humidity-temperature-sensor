@@ -58,3 +58,7 @@ export type TempSensorService = {
   ): Unsubscribe;
 };
 ```
+
+---
+
+For further details, see the GPIO Pin Service and TEMP_SENSOR_ENDPOINTS_SPEC specifications.
