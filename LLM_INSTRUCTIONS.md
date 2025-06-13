@@ -50,6 +50,9 @@
 - Run `npm run lint` regularly to check for lint errors
 - Follow the functional programming paradigm
 - Follow [Redux](https://redux.js.org/introduction/core-concepts) and [Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing) patterns for data flow and handling events
+- Error or exception flow in the application should follow this pattern
+  - only throw an error when the application process should be halted (i.e. die)
+  - in all other cases, return an error object that retains the call stack data, error message and any other data such as the causing error object
 
 ### Typescript
 
