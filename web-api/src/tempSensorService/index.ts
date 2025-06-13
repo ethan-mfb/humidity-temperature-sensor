@@ -1,5 +1,5 @@
 import { targetDataGpioPin } from "./constants.js";
-import { getGpioPinService } from "../gpioPinService/index.js";
+import { getGpioPinService } from "../gpioPinPollingService/index.js";
 
 const gpioPinService = getGpioPinService({ targetPin: targetDataGpioPin });
 
