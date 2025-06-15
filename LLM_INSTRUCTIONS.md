@@ -53,6 +53,7 @@
 - Error or exception flow in the application should follow this pattern
   - only throw an error when the application process should be halted (i.e. die)
   - in all other cases, return an error object that retains the call stack data, error message and any other data such as the causing error object
+  - use `unknown` for the error type in `try/catch` blocks
 
 ### Typescript
 
