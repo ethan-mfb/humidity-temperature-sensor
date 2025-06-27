@@ -33,9 +33,9 @@ export function createGpioPinService(): GpioPinService {
     if (!childProcess) {
       const gpioPinPollingServicePath = path.resolve(
         __dirname,
-        "../gpioPinPollingService/index.js"
+        "../gpioPinPollingService/index.js",
       );
-      
+
       childProcess = startChildProcess({
         command: gpioPinPollingServicePath,
       });
@@ -55,7 +55,10 @@ export function createGpioPinService(): GpioPinService {
 
       onChildProcessEvent(childProcess, "stopped", (event) => {
         if (event.type === "stopped") {
-          emitter.emit("status", { status: "exited", pin: currentPin ?? undefined });
+          emitter.emit("status", {
+            status: "exited",
+            pin: currentPin ?? undefined,
+          });
           cleanup();
         }
       });
@@ -91,7 +94,7 @@ export function createGpioPinService(): GpioPinService {
     return new Promise((resolve, reject) => {
       try {
         const child = ensureChildProcess();
-        
+
         const timeoutId = setTimeout(() => {
           reject(new Error(`Command timeout: ${command.type}`));
         }, 5000);
@@ -117,7 +120,7 @@ export function createGpioPinService(): GpioPinService {
 
         emitter.on("status", statusHandler);
         emitter.on("error", errorHandler);
-        
+
         child.send(command);
       } catch (error) {
         reject(new Error(getErrorReason(error)));
@@ -129,7 +132,7 @@ export function createGpioPinService(): GpioPinService {
     if (isPolling && currentPin === pin) {
       return;
     }
-    
+
     if (isPolling && currentPin !== pin) {
       await stopPolling();
     }
@@ -141,7 +144,7 @@ export function createGpioPinService(): GpioPinService {
     if (!isPolling) {
       return;
     }
-    
+
     await sendCommand({ type: "stop" });
   }
 
@@ -155,7 +158,9 @@ export function createGpioPinService(): GpioPinService {
     emitter.on("error", callback);
   }
 
-  function onStatus(callback: (status: { status: string; pin?: number }) => void): void {
+  function onStatus(
+    callback: (status: { status: string; pin?: number }) => void,
+  ): void {
     emitter.on("status", callback);
   }
 

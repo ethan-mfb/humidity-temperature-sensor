@@ -77,7 +77,11 @@ describe("isGpioPollingMessage", () => {
   });
 
   it("should reject objects without type", () => {
-    const withoutType = [{ payload: {} }, { reason: "error" }, { status: "started" }];
+    const withoutType = [
+      { payload: {} },
+      { reason: "error" },
+      { status: "started" },
+    ];
     withoutType.forEach((obj) => {
       expect(isGpioPollingMessage(obj)).toBe(false);
     });

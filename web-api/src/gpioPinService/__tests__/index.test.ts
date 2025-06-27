@@ -1,12 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-  Mock,
-} from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
 import { createGpioPinService } from "../index.js";
 import type { ChildProcessHandle } from "../../childProcessService/index.js";
 
@@ -34,7 +26,7 @@ describe("createGpioPinService", () => {
 
   beforeEach(async () => {
     messageHandlers = new Map();
-    
+
     mockChildProcess = {
       pid: 1234,
       send: vi.fn(),
@@ -49,7 +41,9 @@ describe("createGpioPinService", () => {
       messageHandlers.set(eventType, handler);
     });
 
-    const childProcessService = await import("../../childProcessService/index.js");
+    const childProcessService = await import(
+      "../../childProcessService/index.js"
+    );
     (childProcessService.startChildProcess as Mock) = mockStartChildProcess;
     (childProcessService.stopChildProcess as Mock) = mockStopChildProcess;
     (childProcessService.onChildProcessEvent as Mock) = mockOnChildProcessEvent;
@@ -65,7 +59,7 @@ describe("createGpioPinService", () => {
     it("should start polling for a pin", async () => {
       const dataCallback = vi.fn();
       const statusCallback = vi.fn();
-      
+
       service.onData(dataCallback);
       service.onStatus(statusCallback);
 
@@ -75,7 +69,7 @@ describe("createGpioPinService", () => {
       // Simulate child process started
       const messageHandler = messageHandlers.get("message");
       expect(messageHandler).toBeDefined();
-      
+
       messageHandler!({
         type: "message",
         data: { type: "status", status: "started", pin: 4 },
@@ -184,7 +178,7 @@ describe("createGpioPinService", () => {
 
       // Start polling pin 5 (should stop pin 4 first)
       const startPromise2 = service.startPolling(5);
-      
+
       // Simulate stop response first
       setTimeout(() => {
         messageHandler!({
@@ -192,7 +186,7 @@ describe("createGpioPinService", () => {
           data: { type: "status", status: "stopped", pin: 4 },
         });
       }, 10);
-      
+
       // Then simulate start response for new pin
       setTimeout(() => {
         messageHandler!({
@@ -204,9 +198,18 @@ describe("createGpioPinService", () => {
       await startPromise2;
 
       expect(mockChildProcess.send).toHaveBeenCalledWith({ type: "stop" });
-      expect(mockChildProcess.send).toHaveBeenCalledWith({ type: "start", pin: 5 });
-      expect(statusCallback).toHaveBeenCalledWith({ status: "stopped", pin: 4 });
-      expect(statusCallback).toHaveBeenCalledWith({ status: "started", pin: 5 });
+      expect(mockChildProcess.send).toHaveBeenCalledWith({
+        type: "start",
+        pin: 5,
+      });
+      expect(statusCallback).toHaveBeenCalledWith({
+        status: "stopped",
+        pin: 4,
+      });
+      expect(statusCallback).toHaveBeenCalledWith({
+        status: "started",
+        pin: 5,
+      });
     });
   });
 
@@ -236,7 +239,10 @@ describe("createGpioPinService", () => {
       await stopPromise;
 
       expect(mockChildProcess.send).toHaveBeenCalledWith({ type: "stop" });
-      expect(statusCallback).toHaveBeenCalledWith({ status: "stopped", pin: 4 });
+      expect(statusCallback).toHaveBeenCalledWith({
+        status: "stopped",
+        pin: 4,
+      });
     });
 
     it("should not send stop command if not polling", async () => {
@@ -303,7 +309,7 @@ describe("createGpioPinService", () => {
       vi.useFakeTimers();
 
       const startPromise = service.startPolling(4);
-      
+
       // Fast-forward time to trigger timeout
       vi.advanceTimersByTime(6000);
 
