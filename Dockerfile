@@ -20,13 +20,13 @@ ENV NVM_DIR=/home/dev/.nvm
 RUN mkdir -p $NVM_DIR && \
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash && \
     . "$NVM_DIR/nvm.sh" && \
-    nvm install --lts && \
-    nvm alias default 'lts/*'
+    nvm install v16 && \
+    nvm alias default v16
 
 # Set up Node.js in PATH for all users and ensure nvm/node are available in all shells
 RUN echo 'export NVM_DIR="$HOME/.nvm"' > /home/dev/.bashrc_nvm && \
     echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> /home/dev/.bashrc_nvm && \
-    echo 'export PATH="$NVM_DIR/versions/node/$(. $NVM_DIR/nvm.sh && nvm version lts/*)/bin:$PATH"' >> /home/dev/.bashrc_nvm && \
+    echo 'export PATH="$NVM_DIR/versions/node/$(. $NVM_DIR/nvm.sh && nvm version v16)/bin:$PATH"' >> /home/dev/.bashrc_nvm && \
     cat /home/dev/.bashrc_nvm >> /home/dev/.bashrc && \
     rm /home/dev/.bashrc_nvm
 
