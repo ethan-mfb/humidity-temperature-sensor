@@ -81,8 +81,9 @@ export function createGpioPollingService(): GpioPollingService {
       return;
     }
     isListening = false;
+    const currentPin = pin;
     cleanup();
-    sendFn({ type: "status", status: "stopped", pin: pin ?? undefined });
+    sendFn({ type: "status", status: "stopped", pin: currentPin ?? undefined });
   }
 
   function handleMalformedCommand(sendFn: (msg: GpioPollingMessage) => void) {
