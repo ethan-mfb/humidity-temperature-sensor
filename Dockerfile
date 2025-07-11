@@ -1,8 +1,9 @@
 FROM ubuntu:latest
 
 # Install dependencies
+# jq is required for JSON deserialization in bash scripts (e.g., pr-get-comments.sh)
 RUN apt-get update && \
-    apt-get install -y curl git sudo python3 build-essential make g++ && \
+    apt-get install -y curl git sudo python3 build-essential make g++ jq && \
     rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
@@ -12,6 +13,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     apt-get update && \
     apt-get install -y gh && \
     rm -rf /var/lib/apt/lists/*
+
 
 # Create dev user with passwordless sudo and home directory
 RUN useradd -m -d /home/dev -s /bin/bash dev && \
@@ -37,6 +39,9 @@ RUN echo 'export NVM_DIR="$HOME/.nvm"' > /home/dev/.bashrc_nvm && \
     echo 'export PATH="$NVM_DIR/versions/node/$(. $NVM_DIR/nvm.sh && nvm version lts/*)/bin:$PATH"' >> /home/dev/.bashrc_nvm && \
     cat /home/dev/.bashrc_nvm >> /home/dev/.bashrc && \
     rm /home/dev/.bashrc_nvm
+
+# Install Claude Code CLI
+RUN . "$NVM_DIR/nvm.sh" && npm install -g @anthropic-ai/claude-code
 
 # Set working directory
 WORKDIR /home/dev
