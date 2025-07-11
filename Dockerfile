@@ -1,5 +1,9 @@
 FROM ubuntu:latest
 
+# Build arguments for git configuration
+ARG GIT_USER_NAME
+ARG GIT_USER_EMAIL
+
 # Install dependencies
 # jq is required for JSON deserialization in bash scripts (e.g., pr-get-comments.sh)
 RUN apt-get update && \
@@ -42,6 +46,10 @@ RUN echo 'export NVM_DIR="$HOME/.nvm"' > /home/dev/.bashrc_nvm && \
 
 # Install Claude Code CLI
 RUN . "$NVM_DIR/nvm.sh" && npm install -g @anthropic-ai/claude-code
+
+# Configure git global settings for dev user
+RUN git config --global user.name "$GIT_USER_NAME" && \
+    git config --global user.email "$GIT_USER_EMAIL"
 
 # Set working directory
 WORKDIR /home/dev
