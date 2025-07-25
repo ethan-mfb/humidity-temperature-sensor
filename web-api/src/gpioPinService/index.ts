@@ -13,6 +13,13 @@ import type {
 } from "./types.js";
 import { isGpioPollingMessage } from "./types.guards.js";
 import { getErrorReason } from "../utils.js";
+import {
+  TIMEOUTS,
+  COMMAND_TYPES,
+  STATUS_TYPES,
+  EVENT_TYPES,
+  MESSAGE_TYPES,
+} from "./constants.js";
 
 export function createGpioPinService(): GpioPinService {
   const emitter = new EventEmitter();
@@ -41,23 +48,23 @@ export function createGpioPinService(): GpioPinService {
         command: gpioPinPollingServicePath,
       });
 
-      onChildProcessEvent(childProcess, "message", (event) => {
-        if (event.type === "message" && isGpioPollingMessage(event.data)) {
+      onChildProcessEvent(childProcess, EVENT_TYPES.MESSAGE, (event) => {
+        if (event.type === EVENT_TYPES.MESSAGE && isGpioPollingMessage(event.data)) {
           handleChildMessage(event.data);
         }
       });
 
-      onChildProcessEvent(childProcess, "error", (event) => {
-        if (event.type === "error") {
-          emitter.emit("error", event.error.message);
+      onChildProcessEvent(childProcess, EVENT_TYPES.ERROR, (event) => {
+        if (event.type === EVENT_TYPES.ERROR) {
+          emitter.emit(EVENT_TYPES.ERROR, event.error.message);
           cleanup();
         }
       });
 
-      onChildProcessEvent(childProcess, "stopped", (event) => {
-        if (event.type === "stopped") {
-          emitter.emit("status", {
-            status: "exited",
+      onChildProcessEvent(childProcess, EVENT_TYPES.STOPPED, (event) => {
+        if (event.type === EVENT_TYPES.STOPPED) {
+          emitter.emit(EVENT_TYPES.STATUS, {
+            status: STATUS_TYPES.EXITED,
             pin: currentPin ?? undefined,
           });
           cleanup();
@@ -69,21 +76,21 @@ export function createGpioPinService(): GpioPinService {
 
   function handleChildMessage(message: GpioPollingMessage) {
     switch (message.type) {
-      case "data":
-        emitter.emit("data", message.payload);
+      case MESSAGE_TYPES.DATA:
+        emitter.emit(EVENT_TYPES.DATA, message.payload);
         break;
-      case "error":
-        emitter.emit("error", message.reason);
+      case MESSAGE_TYPES.ERROR:
+        emitter.emit(EVENT_TYPES.ERROR, message.reason);
         break;
-      case "status":
-        if (message.status === "started") {
+      case MESSAGE_TYPES.STATUS:
+        if (message.status === STATUS_TYPES.STARTED) {
           isPolling = true;
           currentPin = message.pin ?? null;
-        } else if (message.status === "stopped") {
+        } else if (message.status === STATUS_TYPES.STOPPED) {
           isPolling = false;
           currentPin = null;
         }
-        emitter.emit("status", {
+        emitter.emit(EVENT_TYPES.STATUS, {
           status: message.status,
           pin: message.pin,
         });
@@ -98,29 +105,29 @@ export function createGpioPinService(): GpioPinService {
 
         const timeoutId = setTimeout(() => {
           reject(new Error(`Command timeout: ${command.type}`));
-        }, 5000);
+        }, TIMEOUTS.COMMAND_TIMEOUT_MS);
 
         const statusHandler = (status: { status: string; pin?: number }) => {
           if (
-            (command.type === "start" && status.status === "started") ||
-            (command.type === "stop" && status.status === "stopped")
+            (command.type === COMMAND_TYPES.START && status.status === STATUS_TYPES.STARTED) ||
+            (command.type === COMMAND_TYPES.STOP && status.status === STATUS_TYPES.STOPPED)
           ) {
             clearTimeout(timeoutId);
-            emitter.off("status", statusHandler);
-            emitter.off("error", errorHandler);
+            emitter.off(EVENT_TYPES.STATUS, statusHandler);
+            emitter.off(EVENT_TYPES.ERROR, errorHandler);
             resolve();
           }
         };
 
         const errorHandler = (reason: string) => {
           clearTimeout(timeoutId);
-          emitter.off("status", statusHandler);
-          emitter.off("error", errorHandler);
+          emitter.off(EVENT_TYPES.STATUS, statusHandler);
+          emitter.off(EVENT_TYPES.ERROR, errorHandler);
           reject(new Error(reason));
         };
 
-        emitter.on("status", statusHandler);
-        emitter.on("error", errorHandler);
+        emitter.on(EVENT_TYPES.STATUS, statusHandler);
+        emitter.on(EVENT_TYPES.ERROR, errorHandler);
 
         child.send(command);
       } catch (error) {
@@ -138,7 +145,7 @@ export function createGpioPinService(): GpioPinService {
       await stopPolling();
     }
 
-    await sendCommand({ type: "start", pin });
+    await sendCommand({ type: COMMAND_TYPES.START, pin });
   }
 
   async function stopPolling(): Promise<void> {
@@ -146,23 +153,23 @@ export function createGpioPinService(): GpioPinService {
       return;
     }
 
-    await sendCommand({ type: "stop" });
+    await sendCommand({ type: COMMAND_TYPES.STOP });
   }
 
   function onData(
     callback: (data: { pin: number; value: number; timestamp: number }) => void,
   ): void {
-    emitter.on("data", callback);
+    emitter.on(EVENT_TYPES.DATA, callback);
   }
 
   function onError(callback: (reason: string) => void): void {
-    emitter.on("error", callback);
+    emitter.on(EVENT_TYPES.ERROR, callback);
   }
 
   function onStatus(
     callback: (status: { status: string; pin?: number }) => void,
   ): void {
-    emitter.on("status", callback);
+    emitter.on(EVENT_TYPES.STATUS, callback);
   }
 
   // Cleanup on process exit (only in production, not during testing)
