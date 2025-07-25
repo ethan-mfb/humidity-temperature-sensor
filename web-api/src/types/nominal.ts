@@ -6,7 +6,7 @@ export type GpioValue = number & { readonly __brand: 'GpioValue' };
 export type TemperatureC = number & { readonly __brand: 'TemperatureC' };
 export type TemperatureF = number & { readonly __brand: 'TemperatureF' };
 export type HumidityPercentage = number & { readonly __brand: 'HumidityPercentage' };
-export type Timestamp = number & { readonly __brand: 'Timestamp' };
+export type Timestamp = string & { readonly __brand: 'Timestamp' };
 export type IntervalMs = number & { readonly __brand: 'IntervalMs' };
 
 // Type guard functions for creating nominal types
@@ -45,11 +45,11 @@ export const createHumidityPercentage = (value: number): HumidityPercentage => {
   return value as HumidityPercentage;
 };
 
-export const createTimestamp = (value: number = Date.now()): Timestamp => {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`Invalid timestamp: ${value}. Must be positive integer.`);
+export const createTimestamp = (date: Date = new Date()): Timestamp => {
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    throw new Error(`Invalid date: ${date}. Must be a valid Date instance.`);
   }
-  return value as Timestamp;
+  return date.toJSON() as Timestamp;
 };
 
 export const createIntervalMs = (value: number): IntervalMs => {
@@ -65,5 +65,5 @@ export const unwrapGpioValue = (value: GpioValue): number => value as number;
 export const unwrapTemperatureC = (temp: TemperatureC): number => temp as number;
 export const unwrapTemperatureF = (temp: TemperatureF): number => temp as number;
 export const unwrapHumidityPercentage = (humidity: HumidityPercentage): number => humidity as number;
-export const unwrapTimestamp = (timestamp: Timestamp): number => timestamp as number;
+export const unwrapTimestamp = (timestamp: Timestamp): string => timestamp as string;
 export const unwrapIntervalMs = (interval: IntervalMs): number => interval as number;
