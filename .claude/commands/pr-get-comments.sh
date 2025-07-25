@@ -57,13 +57,13 @@ echo "✅ On correct branch: $SOURCE_BRANCH"
 echo "🔍 Fetching comments..."
 
 # Get general PR comments
-GENERAL_COMMENTS=$(echo "$PR_INFO" | jq -r '.comments[]? | select(.body | test("(?i)(lgtm|looks good|approved|✅|👍)") | not) | "general||||\(.author.login)||||\(.body)||||\(.createdAt)"' 2>/dev/null || true)
+GENERAL_COMMENTS=$(echo "$PR_INFO" | jq -r '.comments[]? | select(.body | test("(?i)(lgtm|looks good|approved|✅|👍)") | not) | "general\t\(.author.login)\t\(.body)\t\(.createdAt)"' 2>/dev/null || true)
 
-# Get published review comments (line-specific comments)
-REVIEW_COMMENTS=$(timeout 10 gh api "repos/:owner/:repo/pulls/$PR_ID/comments" --jq '.[]? | select(.body | test("(?i)(lgtm|looks good|approved|✅|👍)") | not) | "review||||\(.user.login)||||\(.body)||||\(.created_at)||||\(.path)||||\(if .line then .line else .original_line end)"' 2>/dev/null || true)
+# Get published review comments (line-specific comments) - encode newlines to avoid parsing issues
+REVIEW_COMMENTS=$(timeout 10 gh api "repos/:owner/:repo/pulls/$PR_ID/comments" --jq '.[]? | select(.body | test("(?i)(lgtm|looks good|approved|✅|👍)") | not) | "review\t\(.user.login)\t\(.body | gsub("\\r?\\n"; "⏎"))\t\(.created_at)\t\(.path)\t\(if .line then .line else .original_line end)"' 2>/dev/null || true)
 
 # Get review body comments (submitted reviews with body text)
-REVIEW_BODY_COMMENTS=$(echo "$PR_INFO" | jq -r '.reviews[]? | select(.body and .body != "" and (.body | test("(?i)(lgtm|looks good|approved|✅|👍)") | not)) | "review-body||||\(.author.login)||||\(.body)||||\(.submittedAt // .createdAt)"' 2>/dev/null || true)
+REVIEW_BODY_COMMENTS=$(echo "$PR_INFO" | jq -r '.reviews[]? | select(.body and .body != "" and (.body | test("(?i)(lgtm|looks good|approved|✅|👍)") | not)) | "review-body\t\(.author.login)\t\(.body)\t\(.submittedAt // .createdAt)"' 2>/dev/null || true)
 
 TEMP_FILE=$(mktemp)
 {
@@ -72,9 +72,14 @@ TEMP_FILE=$(mktemp)
     if [[ -n "$REVIEW_BODY_COMMENTS" ]]; then echo "$REVIEW_BODY_COMMENTS"; fi
 } > "$TEMP_FILE"
 
-# Remove empty lines
-grep -v '^$' "$TEMP_FILE" > "$TEMP_FILE.clean" 2>/dev/null || true
-mv "$TEMP_FILE.clean" "$TEMP_FILE" 2>/dev/null || true
+# Remove empty lines using bash-only approach
+if [[ -f "$TEMP_FILE" ]]; then
+    # Read file and remove empty lines
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -n "$line" ]] && echo "$line"
+    done < "$TEMP_FILE" > "$TEMP_FILE.clean" 2>/dev/null || touch "$TEMP_FILE.clean"
+    mv "$TEMP_FILE.clean" "$TEMP_FILE" 2>/dev/null || touch "$TEMP_FILE"
+fi
 
 if [[ ! -s "$TEMP_FILE" ]]; then
     # Check if there are pending reviews that might contain draft comments
@@ -95,7 +100,7 @@ if [[ ! -s "$TEMP_FILE" ]]; then
         echo "✅ No unresolved comments found for PR #$PR_ID"
     fi
     
-    rm "$TEMP_FILE"
+    [[ -f "$TEMP_FILE" ]] && unlink "$TEMP_FILE" 2>/dev/null || true
     exit 0
 fi
 
@@ -107,36 +112,53 @@ COUNTER=1
 declare -a COMMENTS
 declare -a DEV_PLANS
 
-while IFS='||||' read -r COMMENT_TYPE AUTHOR BODY CREATED_AT PATH LINE; do
+# Process each comment record (handling multiline comments)
+while IFS= read -r line; do
     # Skip empty lines
-    [[ -z "$AUTHOR" ]] && continue
+    [[ -z "$line" ]] && continue
+    
+    # Parse the comment record using tab delimiter
+    IFS=$'\t' read -r COMMENT_TYPE AUTHOR BODY CREATED_AT PATH LINE_NUM <<< "$line"
+    
+    # Skip lines without proper data
+    [[ -z "$COMMENT_TYPE" || -z "$AUTHOR" ]] && continue
+    
+    # Decode newlines back for display (using bash substitution)
+    DECODED_BODY="${BODY//⏎/$'\n'}"
     
     if [[ "$COMMENT_TYPE" == "review" ]]; then
-        COMMENTS[$COUNTER]="$AUTHOR (on $PATH:$LINE): $BODY"
+        COMMENTS[$COUNTER]="$AUTHOR (on $PATH:$LINE_NUM): $DECODED_BODY"
     elif [[ "$COMMENT_TYPE" == "review-body" ]]; then
-        COMMENTS[$COUNTER]="$AUTHOR (review): $BODY"
+        COMMENTS[$COUNTER]="$AUTHOR (review): $DECODED_BODY"
     else
-        COMMENTS[$COUNTER]="$AUTHOR: $BODY"
+        COMMENTS[$COUNTER]="$AUTHOR: $DECODED_BODY"
     fi
     
     # Generate a simple dev plan based on comment content
     DEV_PLAN=""
     
-    # Check for common comment patterns and suggest appropriate dev plans
-    if echo "$BODY" | grep -qi "test\|spec\|coverage"; then
+    # Check for common comment patterns and suggest appropriate dev plans (using bash pattern matching)
+    LOWER_BODY="${DECODED_BODY,,}"  # Convert to lowercase
+    if [[ "$LOWER_BODY" == *"test"* || "$LOWER_BODY" == *"spec"* || "$LOWER_BODY" == *"coverage"* ]]; then
         DEV_PLAN="Add/update unit tests and ensure adequate test coverage"
-    elif echo "$BODY" | grep -qi "type\|interface\|typescript"; then
+    elif [[ "$LOWER_BODY" == *"type"* || "$LOWER_BODY" == *"interface"* || "$LOWER_BODY" == *"typescript"* ]]; then
         DEV_PLAN="Fix TypeScript type definitions and improve type safety"
-    elif echo "$BODY" | grep -qi "error\|exception\|handle"; then
+    elif [[ "$LOWER_BODY" == *"error"* || "$LOWER_BODY" == *"exception"* || "$LOWER_BODY" == *"handle"* ]]; then
         DEV_PLAN="Improve error handling and add appropriate error cases"
-    elif echo "$BODY" | grep -qi "performance\|optimize\|slow"; then
+    elif [[ "$LOWER_BODY" == *"performance"* || "$LOWER_BODY" == *"optimize"* || "$LOWER_BODY" == *"slow"* ]]; then
         DEV_PLAN="Optimize performance and address bottlenecks"
-    elif echo "$BODY" | grep -qi "document\|comment\|readme"; then
+    elif [[ "$LOWER_BODY" == *"document"* || "$LOWER_BODY" == *"comment"* || "$LOWER_BODY" == *"readme"* ]]; then
         DEV_PLAN="Add documentation and code comments"
-    elif echo "$BODY" | grep -qi "security\|vulnerability\|validate"; then
+    elif [[ "$LOWER_BODY" == *"security"* || "$LOWER_BODY" == *"vulnerability"* || "$LOWER_BODY" == *"validate"* ]]; then
         DEV_PLAN="Address security concerns and add input validation"
-    elif echo "$BODY" | grep -qi "refactor\|clean\|simplify"; then
+    elif [[ "$LOWER_BODY" == *"refactor"* || "$LOWER_BODY" == *"clean"* || "$LOWER_BODY" == *"simplify"* ]]; then
         DEV_PLAN="Refactor code for better maintainability and clarity"
+    elif [[ "$LOWER_BODY" == *"action"* || "$LOWER_BODY" == *"github"* ]]; then
+        DEV_PLAN="Add/update GitHub Actions workflow for automation"
+    elif [[ "$LOWER_BODY" == *"constant"* || "$LOWER_BODY" == *"magic"* ]]; then
+        DEV_PLAN="Extract magic numbers/strings into well-named constants"
+    elif [[ "$LOWER_BODY" == *"dirname"* || "$LOWER_BODY" == *"esm"* || "$LOWER_BODY" == *"module"* ]]; then
+        DEV_PLAN="Fix ESM module compatibility issues"
     else
         DEV_PLAN="Address the feedback and implement suggested changes"
     fi
@@ -144,8 +166,11 @@ while IFS='||||' read -r COMMENT_TYPE AUTHOR BODY CREATED_AT PATH LINE; do
     DEV_PLANS[$COUNTER]="$DEV_PLAN"
     
     echo ""
-    echo "[$COUNTER] Comment by $AUTHOR ($(date -d "$CREATED_AT" '+%Y-%m-%d %H:%M')):"
-    echo "    $(echo "$BODY" | head -c 200 | tr '\n' ' ')$([ ${#BODY} -gt 200 ] && echo "...")"
+    echo "[$COUNTER] Comment by $AUTHOR ($CREATED_AT):"
+    # Truncate body to 200 chars and replace newlines with spaces (bash-only approach)
+    TRUNCATED_BODY="${DECODED_BODY:0:200}"
+    DISPLAY_BODY="${TRUNCATED_BODY//$'\n'/ }"
+    echo "    $DISPLAY_BODY$([ ${#DECODED_BODY} -gt 200 ] && echo "...")"
     echo ""
     echo "    💡 Suggested Dev Plan:"
     echo "    $DEV_PLAN"
@@ -154,7 +179,7 @@ while IFS='||||' read -r COMMENT_TYPE AUTHOR BODY CREATED_AT PATH LINE; do
     ((COUNTER++))
 done < "$TEMP_FILE"
 
-rm "$TEMP_FILE"
+[[ -f "$TEMP_FILE" ]] && unlink "$TEMP_FILE" 2>/dev/null || true
 
 TOTAL_COMMENTS=$((COUNTER - 1))
 
