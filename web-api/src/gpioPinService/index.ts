@@ -13,6 +13,7 @@ import type {
 } from "./types.js";
 import { isGpioPollingMessage } from "./types.guards.js";
 import { getErrorReason } from "../utils.js";
+import { getDirname } from "../dirname.js";
 
 export function createGpioPinService(): GpioPinService {
   const emitter = new EventEmitter();
@@ -31,6 +32,7 @@ export function createGpioPinService(): GpioPinService {
 
   function ensureChildProcess(): ChildProcessHandle {
     if (!childProcess) {
+      const __dirname = getDirname(import.meta.url);
       const gpioPinPollingServicePath = path.resolve(
         __dirname,
         "../gpioPinPollingService/index.js",
