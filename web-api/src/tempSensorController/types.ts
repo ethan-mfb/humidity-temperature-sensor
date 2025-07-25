@@ -1,5 +1,5 @@
 // Temperature sensor controller types
-import type { TemperatureC, TemperatureF, HumidityPercentage, Timestamp } from "../types/nominal.js";
+import type { TemperatureC, TemperatureF, HumidityPercentage, Timestamp } from "../types/nominal-types.js";
 
 export type TempSensorStatus = {
   status: "running" | "stopped";

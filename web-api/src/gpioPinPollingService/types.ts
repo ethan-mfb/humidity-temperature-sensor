@@ -1,5 +1,5 @@
 // Shared message types for GPIO polling service
-import type { GpioPin, GpioValue, Timestamp } from "../types/nominal.js";
+import type { GpioPin, GpioValue, Timestamp } from "../types/nominal-types.js";
 
 export type GpioPollingCommand =
   | { type: "start"; pin: GpioPin }

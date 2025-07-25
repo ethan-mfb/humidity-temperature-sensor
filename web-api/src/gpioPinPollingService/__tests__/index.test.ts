@@ -11,7 +11,7 @@ import {
 } from "vitest";
 import { createGpioPollingService } from "../index.js";
 import type { GpioPollingCommand } from "../types.js";
-import { createGpioPin } from "../../types/nominal.js";
+import { createGpioPin } from "../../types/nominal-utils.js";
 
 // Mock onoff's Gpio
 vi.mock("onoff", () => ({

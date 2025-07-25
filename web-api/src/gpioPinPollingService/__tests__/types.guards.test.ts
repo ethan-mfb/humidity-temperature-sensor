@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isGpioPollingCommand } from "../types.guards.js";
-import { createGpioPin } from "../../types/nominal.js";
+import { createGpioPin } from "../../types/nominal-utils.js";
 
 describe("isGpioPollingCommand", () => {
   it("returns true for valid start command", () => {
