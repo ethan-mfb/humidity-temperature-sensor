@@ -49,3 +49,12 @@ export function resolveFromModule(importMetaUrl: string, relativePath: string): 
   const dirname = getDirname(importMetaUrl);
   return path.resolve(dirname, relativePath);
 }
+
+// Default export for better compatibility
+const dirnameUtils = {
+  getDirname,
+  getFilename,
+  resolveFromModule,
+};
+
+export default dirnameUtils;
