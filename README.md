@@ -12,7 +12,9 @@ A raspberry pi 0 2 w humidity and temperature sensor
 1. install docker desktop
 1. on windows, setup WSL 2, install ubuntu 22 LTS and integrate that with docker desktop
 1. clone the repository (clone into the ubuntu 22 if on windows)
-1. run `./devcontainer.sh`
+1. run `./devcontainer.sh "Your Name" "your@email.com"`
+
+   > This will build a Docker container with your git configuration and start the development environment.
 
 ## pi setup
 
