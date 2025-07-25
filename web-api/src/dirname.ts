@@ -50,11 +50,4 @@ export function resolveFromModule(importMetaUrl: string, relativePath: string): 
   return path.resolve(dirname, relativePath);
 }
 
-// Default export for better compatibility
-const dirnameUtils = {
-  getDirname,
-  getFilename,
-  resolveFromModule,
-};
-
-export default dirnameUtils;
+// All exports are named exports - no default export
