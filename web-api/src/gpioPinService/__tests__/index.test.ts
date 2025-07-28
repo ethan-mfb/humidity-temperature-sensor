@@ -40,14 +40,17 @@ describe("createGpioPinService", () => {
   let mockStartChildProcess: Mock;
   let mockStopChildProcess: Mock;
   let mockOnChildProcessEvent: Mock;
+  let mockSend: Mock;
   let messageHandlers: Map<string, (event: any) => void>;
 
   beforeEach(async () => {
     messageHandlers = new Map();
 
+    mockSend = vi.fn();
+
     mockChildProcess = {
       pid: TEST_DATA.PID,
-      send: vi.fn(),
+      send: mockSend,
       stop: vi.fn(),
       _proc: {} as any,
       _emitter: {} as any,
@@ -102,7 +105,7 @@ describe("createGpioPinService", () => {
       expect(mockStartChildProcess).toHaveBeenCalledWith({
         command: "/mock/path/to/gpioPinPollingService/index.js",
       });
-      expect(mockChildProcess.send).toHaveBeenCalledWith({
+      expect(mockSend).toHaveBeenCalledWith({
         type: COMMAND_TYPES.START,
         pin: TEST_DATA.PIN,
       });
@@ -189,13 +192,13 @@ describe("createGpioPinService", () => {
       });
       await startPromise1;
 
-      mockChildProcess.send.mockClear();
+      mockSend.mockClear();
 
       // Second start with same pin
       await service.startPolling(TEST_DATA.PIN);
 
       // Should not send another start command for the same pin
-      expect(mockChildProcess.send).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     it("should stop current polling before starting new pin", async () => {
@@ -216,7 +219,7 @@ describe("createGpioPinService", () => {
       await startPromise1;
 
       statusCallback.mockClear();
-      mockChildProcess.send.mockClear();
+      mockSend.mockClear();
 
       // Start polling pin 5 (should stop pin 4 first)
       const startPromise2 = service.startPolling(TEST_DATA.ALT_PIN);
@@ -247,10 +250,10 @@ describe("createGpioPinService", () => {
 
       await startPromise2;
 
-      expect(mockChildProcess.send).toHaveBeenCalledWith({
+      expect(mockSend).toHaveBeenCalledWith({
         type: COMMAND_TYPES.STOP,
       });
-      expect(mockChildProcess.send).toHaveBeenCalledWith({
+      expect(mockSend).toHaveBeenCalledWith({
         type: COMMAND_TYPES.START,
         pin: TEST_DATA.ALT_PIN,
       });
@@ -284,7 +287,7 @@ describe("createGpioPinService", () => {
       await startPromise;
 
       statusCallback.mockClear();
-      mockChildProcess.send.mockClear();
+      mockSend.mockClear();
 
       // Stop polling
       const stopPromise = service.stopPolling();
@@ -298,7 +301,7 @@ describe("createGpioPinService", () => {
       });
       await stopPromise;
 
-      expect(mockChildProcess.send).toHaveBeenCalledWith({
+      expect(mockSend).toHaveBeenCalledWith({
         type: COMMAND_TYPES.STOP,
       });
       expect(statusCallback).toHaveBeenCalledWith({
@@ -309,7 +312,7 @@ describe("createGpioPinService", () => {
 
     it("should not send stop command if not polling", async () => {
       await service.stopPolling();
-      expect(mockChildProcess.send).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 
