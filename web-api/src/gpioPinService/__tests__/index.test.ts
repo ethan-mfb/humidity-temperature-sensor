@@ -1,6 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
 import { createGpioPinService } from "../index.js";
 import type { ChildProcessHandle } from "../../childProcessService/index.js";
+import {
+  TIMEOUTS,
+  COMMAND_TYPES,
+  STATUS_TYPES,
+  EVENT_TYPES,
+  MESSAGE_TYPES,
+} from "../constants.js";
+
+// Test constants for consistency
+const TEST_DATA = {
+  PIN: 4,
+  ALT_PIN: 5,
+  TIMESTAMP: 1234567890,
+  PID: 1234,
+  GPIO_VALUE: 1,
+  ERROR_MESSAGE: "GPIO error",
+  CHILD_CRASH_MESSAGE: "Child process crashed",
+} as const;
 
 // Mock child process service
 vi.mock("../../childProcessService/index.js", () => ({
@@ -28,7 +46,7 @@ describe("createGpioPinService", () => {
     messageHandlers = new Map();
 
     mockChildProcess = {
-      pid: 1234,
+      pid: TEST_DATA.PID,
       send: vi.fn(),
       stop: vi.fn(),
       _proc: {} as any,
@@ -64,15 +82,19 @@ describe("createGpioPinService", () => {
       service.onStatus(statusCallback);
 
       // Start the polling
-      const startPromise = service.startPolling(4);
+      const startPromise = service.startPolling(TEST_DATA.PIN);
 
       // Simulate child process started
-      const messageHandler = messageHandlers.get("message");
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
       expect(messageHandler).toBeDefined();
 
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "started", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
       });
 
       await startPromise;
@@ -81,12 +103,12 @@ describe("createGpioPinService", () => {
         command: "/mock/path/to/gpioPinPollingService/index.js",
       });
       expect(mockChildProcess.send).toHaveBeenCalledWith({
-        type: "start",
-        pin: 4,
+        type: COMMAND_TYPES.START,
+        pin: TEST_DATA.PIN,
       });
       expect(statusCallback).toHaveBeenCalledWith({
-        status: "started",
-        pin: 4,
+        status: STATUS_TYPES.STARTED,
+        pin: TEST_DATA.PIN,
       });
     });
 
@@ -95,27 +117,35 @@ describe("createGpioPinService", () => {
       service.onData(dataCallback);
 
       // Start polling first
-      const startPromise = service.startPolling(4);
-      const messageHandler = messageHandlers.get("message");
+      const startPromise = service.startPolling(TEST_DATA.PIN);
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "started", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
       });
       await startPromise;
 
       // Send data message
       messageHandler!({
-        type: "message",
+        type: EVENT_TYPES.MESSAGE,
         data: {
-          type: "data",
-          payload: { pin: 4, value: 1, timestamp: 1234567890 },
+          type: MESSAGE_TYPES.DATA,
+          payload: {
+            pin: TEST_DATA.PIN,
+            value: TEST_DATA.GPIO_VALUE,
+            timestamp: TEST_DATA.TIMESTAMP,
+          },
         },
       });
 
       expect(dataCallback).toHaveBeenCalledWith({
-        pin: 4,
-        value: 1,
-        timestamp: 1234567890,
+        pin: TEST_DATA.PIN,
+        value: TEST_DATA.GPIO_VALUE,
+        timestamp: TEST_DATA.TIMESTAMP,
       });
     });
 
@@ -124,37 +154,45 @@ describe("createGpioPinService", () => {
       service.onError(errorCallback);
 
       // Start polling first
-      const startPromise = service.startPolling(4);
-      const messageHandler = messageHandlers.get("message");
+      const startPromise = service.startPolling(TEST_DATA.PIN);
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "started", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
       });
       await startPromise;
 
       // Send error message
       messageHandler!({
-        type: "message",
-        data: { type: "error", reason: "GPIO error" },
+        type: EVENT_TYPES.MESSAGE,
+        data: { type: MESSAGE_TYPES.ERROR, reason: TEST_DATA.ERROR_MESSAGE },
       });
 
-      expect(errorCallback).toHaveBeenCalledWith("GPIO error");
+      expect(errorCallback).toHaveBeenCalledWith(TEST_DATA.ERROR_MESSAGE);
     });
 
     it("should not start polling if already polling the same pin", async () => {
       // First start
-      const startPromise1 = service.startPolling(4);
-      const messageHandler = messageHandlers.get("message");
+      const startPromise1 = service.startPolling(TEST_DATA.PIN);
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "started", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
       });
       await startPromise1;
 
       mockChildProcess.send.mockClear();
 
       // Second start with same pin
-      await service.startPolling(4);
+      await service.startPolling(TEST_DATA.PIN);
 
       // Should not send another start command for the same pin
       expect(mockChildProcess.send).not.toHaveBeenCalled();
@@ -165,11 +203,15 @@ describe("createGpioPinService", () => {
       service.onStatus(statusCallback);
 
       // Start polling pin 4
-      const startPromise1 = service.startPolling(4);
-      const messageHandler = messageHandlers.get("message");
+      const startPromise1 = service.startPolling(TEST_DATA.PIN);
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "started", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
       });
       await startPromise1;
 
@@ -177,38 +219,48 @@ describe("createGpioPinService", () => {
       mockChildProcess.send.mockClear();
 
       // Start polling pin 5 (should stop pin 4 first)
-      const startPromise2 = service.startPolling(5);
+      const startPromise2 = service.startPolling(TEST_DATA.ALT_PIN);
 
       // Simulate stop response first
       setTimeout(() => {
         messageHandler!({
-          type: "message",
-          data: { type: "status", status: "stopped", pin: 4 },
+          type: EVENT_TYPES.MESSAGE,
+          data: {
+            type: MESSAGE_TYPES.STATUS,
+            status: STATUS_TYPES.STOPPED,
+            pin: TEST_DATA.PIN,
+          },
         });
       }, 10);
 
       // Then simulate start response for new pin
       setTimeout(() => {
         messageHandler!({
-          type: "message",
-          data: { type: "status", status: "started", pin: 5 },
+          type: EVENT_TYPES.MESSAGE,
+          data: {
+            type: MESSAGE_TYPES.STATUS,
+            status: STATUS_TYPES.STARTED,
+            pin: TEST_DATA.ALT_PIN,
+          },
         });
       }, 20);
 
       await startPromise2;
 
-      expect(mockChildProcess.send).toHaveBeenCalledWith({ type: "stop" });
       expect(mockChildProcess.send).toHaveBeenCalledWith({
-        type: "start",
-        pin: 5,
+        type: COMMAND_TYPES.STOP,
+      });
+      expect(mockChildProcess.send).toHaveBeenCalledWith({
+        type: COMMAND_TYPES.START,
+        pin: TEST_DATA.ALT_PIN,
       });
       expect(statusCallback).toHaveBeenCalledWith({
-        status: "stopped",
-        pin: 4,
+        status: STATUS_TYPES.STOPPED,
+        pin: TEST_DATA.PIN,
       });
       expect(statusCallback).toHaveBeenCalledWith({
-        status: "started",
-        pin: 5,
+        status: STATUS_TYPES.STARTED,
+        pin: TEST_DATA.ALT_PIN,
       });
     });
   });
@@ -219,11 +271,15 @@ describe("createGpioPinService", () => {
       service.onStatus(statusCallback);
 
       // Start polling first
-      const startPromise = service.startPolling(4);
-      const messageHandler = messageHandlers.get("message");
+      const startPromise = service.startPolling(TEST_DATA.PIN);
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "started", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
       });
       await startPromise;
 
@@ -233,15 +289,21 @@ describe("createGpioPinService", () => {
       // Stop polling
       const stopPromise = service.stopPolling();
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "stopped", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STOPPED,
+          pin: TEST_DATA.PIN,
+        },
       });
       await stopPromise;
 
-      expect(mockChildProcess.send).toHaveBeenCalledWith({ type: "stop" });
+      expect(mockChildProcess.send).toHaveBeenCalledWith({
+        type: COMMAND_TYPES.STOP,
+      });
       expect(statusCallback).toHaveBeenCalledWith({
-        status: "stopped",
-        pin: 4,
+        status: STATUS_TYPES.STOPPED,
+        pin: TEST_DATA.PIN,
       });
     });
 
@@ -259,22 +321,26 @@ describe("createGpioPinService", () => {
       service.onStatus(statusCallback);
 
       // Start polling
-      const startPromise = service.startPolling(4);
-      const messageHandler = messageHandlers.get("message");
+      const startPromise = service.startPolling(TEST_DATA.PIN);
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "started", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
       });
       await startPromise;
 
       // Simulate child process error
-      const errorHandler = messageHandlers.get("error");
+      const errorHandler = messageHandlers.get(EVENT_TYPES.ERROR);
       errorHandler!({
-        type: "error",
-        error: new Error("Child process crashed"),
+        type: EVENT_TYPES.ERROR,
+        error: new Error(TEST_DATA.CHILD_CRASH_MESSAGE),
       });
 
-      expect(errorCallback).toHaveBeenCalledWith("Child process crashed");
+      expect(errorCallback).toHaveBeenCalledWith(TEST_DATA.CHILD_CRASH_MESSAGE);
       expect(mockStopChildProcess).toHaveBeenCalledWith(mockChildProcess);
     });
 
@@ -283,37 +349,46 @@ describe("createGpioPinService", () => {
       service.onStatus(statusCallback);
 
       // Start polling
-      const startPromise = service.startPolling(4);
-      const messageHandler = messageHandlers.get("message");
+      const startPromise = service.startPolling(TEST_DATA.PIN);
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
       messageHandler!({
-        type: "message",
-        data: { type: "status", status: "started", pin: 4 },
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
       });
       await startPromise;
 
       statusCallback.mockClear();
 
       // Simulate child process exit
-      const stoppedHandler = messageHandlers.get("stopped");
+      const stoppedHandler = messageHandlers.get(EVENT_TYPES.STOPPED);
       stoppedHandler!({
-        type: "stopped",
+        type: EVENT_TYPES.STOPPED,
         code: 0,
         signal: null,
       });
 
-      expect(statusCallback).toHaveBeenCalledWith({ status: "exited", pin: 4 });
+      expect(statusCallback).toHaveBeenCalledWith({
+        status: STATUS_TYPES.EXITED,
+        pin: TEST_DATA.PIN,
+      });
       expect(mockStopChildProcess).toHaveBeenCalledWith(mockChildProcess);
     });
 
     it("should handle command timeout", async () => {
       vi.useFakeTimers();
 
-      const startPromise = service.startPolling(4);
+      const startPromise = service.startPolling(TEST_DATA.PIN);
 
       // Fast-forward time to trigger timeout
-      vi.advanceTimersByTime(6000);
+      vi.advanceTimersByTime(TIMEOUTS.COMMAND_TIMEOUT_MS + 1000);
 
-      await expect(startPromise).rejects.toThrow("Command timeout: start");
+      await expect(startPromise).rejects.toThrow(
+        `Command timeout: ${COMMAND_TYPES.START}`,
+      );
 
       vi.useRealTimers();
     });
