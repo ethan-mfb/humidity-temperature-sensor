@@ -29,8 +29,8 @@ fi
 
 echo "🔍 Fetching PR information for #$PR_ID..."
 
-# Get PR information including source branch
-PR_INFO=$(gh pr view "$PR_ID" --json headRefName,comments 2>/dev/null || {
+# Get PR information including source branch, comments, and reviews
+PR_INFO=$(gh pr view "$PR_ID" --json headRefName,comments,reviews,author 2>/dev/null || {
     echo "❌ Error: Could not fetch PR #$PR_ID"
     echo "Please check that the PR exists and you have access to it"
     exit 1

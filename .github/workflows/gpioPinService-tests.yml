@@ -1,0 +1,52 @@
+name: GPIO Pin Service Tests
+
+on:
+  push:
+    paths:
+      - 'web-api/src/gpioPinService/**'
+      - 'web-api/package*.json'
+      - 'web-api/tsconfig*.json'
+      - 'web-api/vitest.config.ts'
+      - '.github/workflows/gpioPinService-tests.yml'
+  pull_request:
+    paths:
+      - 'web-api/src/gpioPinService/**'
+      - 'web-api/package*.json'
+      - 'web-api/tsconfig*.json'
+      - 'web-api/vitest.config.ts'
+      - '.github/workflows/gpioPinService-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: 'web-api/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: web-api
+        run: npm ci
+        
+      - name: Run TypeScript type checking
+        working-directory: web-api
+        run: npm run typecheck
+        
+      - name: Run GPIO Pin Service tests
+        working-directory: web-api
+        run: npm test -- --run src/gpioPinService/
+        
+      - name: Check code formatting
+        working-directory: web-api
+        run: npm run check-formatting
