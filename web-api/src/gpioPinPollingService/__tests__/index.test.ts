@@ -53,7 +53,10 @@ describe("createGpioPollingService", () => {
   });
 
   it("should send stopped status on stop", () => {
-    service.handleParentMessage({ type: "start", pin: createGpioPin(4) }, sendFn);
+    service.handleParentMessage(
+      { type: "start", pin: createGpioPin(4) },
+      sendFn,
+    );
     sendFn.mockClear();
     service.handleParentMessage({ type: "stop" }, sendFn);
     expect(sendFn).toHaveBeenCalledWith({

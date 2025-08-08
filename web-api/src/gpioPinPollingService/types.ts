@@ -6,6 +6,9 @@ export type GpioPollingCommand =
   | { type: "stop" };
 
 export type GpioPollingMessage =
-  | { type: "data"; payload: { pin: GpioPin; value: GpioValue; timestamp: Timestamp } }
+  | {
+      type: "data";
+      payload: { pin: GpioPin; value: GpioValue; timestamp: Timestamp };
+    }
   | { type: "error"; reason: string }
   | { type: "status"; status: "started" | "stopped" | "exited"; pin?: GpioPin };

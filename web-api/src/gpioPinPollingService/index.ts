@@ -2,7 +2,11 @@ import { Gpio } from "onoff";
 import type { GpioPollingCommand, GpioPollingMessage } from "./types.js";
 import { getErrorReason } from "../utils.js";
 import { isGpioPollingCommand } from "./types.guards.js";
-import { createGpioValue, createTimestamp, unwrapGpioPin } from "../types/nominal-utils.js";
+import {
+  createGpioValue,
+  createTimestamp,
+  unwrapGpioPin,
+} from "../types/nominal-utils.js";
 import type { GpioPin } from "../types/nominal-types.js";
 
 export type GpioPollingService = {

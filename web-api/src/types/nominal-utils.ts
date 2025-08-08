@@ -1,12 +1,12 @@
 // Utility functions for working with nominal types
-import type { 
-  GpioPin, 
-  GpioValue, 
-  TemperatureC, 
-  TemperatureF, 
-  HumidityPercentage, 
-  Timestamp, 
-  IntervalMs 
+import type {
+  GpioPin,
+  GpioValue,
+  TemperatureC,
+  TemperatureF,
+  HumidityPercentage,
+  Timestamp,
+  IntervalMs,
 } from "./nominal-types.js";
 
 // Type guard functions for creating nominal types
@@ -26,14 +26,18 @@ export const createGpioValue = (value: number): GpioValue => {
 
 export const createTemperatureC = (value: number): TemperatureC => {
   if (!Number.isFinite(value)) {
-    throw new Error(`Invalid temperature (C): ${value}. Must be finite number.`);
+    throw new Error(
+      `Invalid temperature (C): ${value}. Must be finite number.`,
+    );
   }
   return value as TemperatureC;
 };
 
 export const createTemperatureF = (value: number): TemperatureF => {
   if (!Number.isFinite(value)) {
-    throw new Error(`Invalid temperature (F): ${value}. Must be finite number.`);
+    throw new Error(
+      `Invalid temperature (F): ${value}. Must be finite number.`,
+    );
   }
   return value as TemperatureF;
 };
@@ -62,8 +66,14 @@ export const createIntervalMs = (value: number): IntervalMs => {
 // Utility functions for working with nominal types
 export const unwrapGpioPin = (pin: GpioPin): number => pin as number;
 export const unwrapGpioValue = (value: GpioValue): number => value as number;
-export const unwrapTemperatureC = (temp: TemperatureC): number => temp as number;
-export const unwrapTemperatureF = (temp: TemperatureF): number => temp as number;
-export const unwrapHumidityPercentage = (humidity: HumidityPercentage): number => humidity as number;
-export const unwrapTimestamp = (timestamp: Timestamp): string => timestamp as string;
-export const unwrapIntervalMs = (interval: IntervalMs): number => interval as number;
+export const unwrapTemperatureC = (temp: TemperatureC): number =>
+  temp as number;
+export const unwrapTemperatureF = (temp: TemperatureF): number =>
+  temp as number;
+export const unwrapHumidityPercentage = (
+  humidity: HumidityPercentage,
+): number => humidity as number;
+export const unwrapTimestamp = (timestamp: Timestamp): string =>
+  timestamp as string;
+export const unwrapIntervalMs = (interval: IntervalMs): number =>
+  interval as number;

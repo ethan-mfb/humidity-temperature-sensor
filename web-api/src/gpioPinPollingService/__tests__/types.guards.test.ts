@@ -4,7 +4,9 @@ import { createGpioPin } from "../../types/nominal-utils.js";
 
 describe("isGpioPollingCommand", () => {
   it("returns true for valid start command", () => {
-    expect(isGpioPollingCommand({ type: "start", pin: createGpioPin(1) })).toBe(true);
+    expect(isGpioPollingCommand({ type: "start", pin: createGpioPin(1) })).toBe(
+      true,
+    );
   });
   it("returns true for valid stop command", () => {
     expect(isGpioPollingCommand({ type: "stop" })).toBe(true);
