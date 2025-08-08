@@ -11,6 +11,7 @@ import {
 } from "vitest";
 import { createGpioPollingService } from "../index.js";
 import type { GpioPollingCommand } from "../types.js";
+import { createGpioPin } from "../../types/nominal-utils.js";
 
 // Mock onoff's Gpio
 vi.mock("onoff", () => ({
@@ -42,23 +43,26 @@ describe("createGpioPollingService", () => {
   });
 
   it("should send started status on start", () => {
-    const cmd: GpioPollingCommand = { type: "start", pin: 4 };
+    const cmd: GpioPollingCommand = { type: "start", pin: createGpioPin(4) };
     service.handleParentMessage(cmd, sendFn);
     expect(sendFn).toHaveBeenCalledWith({
       type: "status",
       status: "started",
-      pin: 4,
+      pin: createGpioPin(4),
     });
   });
 
   it("should send stopped status on stop", () => {
-    service.handleParentMessage({ type: "start", pin: 4 }, sendFn);
+    service.handleParentMessage(
+      { type: "start", pin: createGpioPin(4) },
+      sendFn,
+    );
     sendFn.mockClear();
     service.handleParentMessage({ type: "stop" }, sendFn);
     expect(sendFn).toHaveBeenCalledWith({
       type: "status",
       status: "stopped",
-      pin: 4,
+      pin: createGpioPin(4),
     });
   });
 
@@ -72,12 +76,12 @@ describe("createGpioPollingService", () => {
   });
 
   it("should cleanup resources on cleanup", () => {
-    const cmd: GpioPollingCommand = { type: "start", pin: 4 };
+    const cmd: GpioPollingCommand = { type: "start", pin: createGpioPin(4) };
     service.handleParentMessage(cmd, sendFn);
     expect(sendFn).toHaveBeenCalledWith({
       type: "status",
       status: "started",
-      pin: 4,
+      pin: createGpioPin(4),
     });
     service.cleanup();
     // No error should be thrown

@@ -2,6 +2,12 @@ import { Gpio } from "onoff";
 import type { GpioPollingCommand, GpioPollingMessage } from "./types.js";
 import { getErrorReason } from "../utils.js";
 import { isGpioPollingCommand } from "./types.guards.js";
+import {
+  createGpioValue,
+  createTimestamp,
+  unwrapGpioPin,
+} from "../types/nominal-utils.js";
+import type { GpioPin } from "../types/nominal-types.js";
 
 export type GpioPollingService = {
   handleParentMessage: (
@@ -13,7 +19,7 @@ export type GpioPollingService = {
 
 export function createGpioPollingService(): GpioPollingService {
   let gpio: Gpio | null = null;
-  let pin: number | null = null;
+  let pin: GpioPin | null = null;
   let isStarted = false;
   let isListening = false;
 
@@ -48,7 +54,7 @@ export function createGpioPollingService(): GpioPollingService {
     }
     cleanup();
     try {
-      gpio = new Gpio(message.pin, "in", "both");
+      gpio = new Gpio(unwrapGpioPin(message.pin), "in", "both");
       pin = message.pin;
       isStarted = true;
       isListening = true;
@@ -62,8 +68,8 @@ export function createGpioPollingService(): GpioPollingService {
           type: "data",
           payload: {
             pin: message.pin,
-            value,
-            timestamp: Date.now(),
+            value: createGpioValue(value),
+            timestamp: createTimestamp(),
           },
         });
       });

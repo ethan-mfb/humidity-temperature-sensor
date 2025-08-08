@@ -1,0 +1,38 @@
+name: Temperature Sensor Controller Tests
+
+on:
+  push:
+    paths:
+      - 'web-api/src/tempSensorController/**'
+  pull_request:
+    paths:
+      - 'web-api/src/tempSensorController/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Using Node.js 18 for CI to avoid crypto polyfill issues with Vitest
+          # Development still uses Node.js 16 as required for onoff library
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'web-api/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: web-api
+        run: npm ci
+
+      - name: Run tempSensorController tests
+        working-directory: web-api
+        run: npm run test:once -- src/tempSensorController/
+
+      - name: Type check
+        working-directory: web-api
+        run: npm run typecheck
