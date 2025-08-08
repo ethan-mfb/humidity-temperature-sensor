@@ -1,6 +1,6 @@
-import { 
-  COMMAND_TYPES, 
-  MESSAGE_TYPES, 
+import {
+  COMMAND_TYPES,
+  MESSAGE_TYPES,
   STATUS_TYPES,
   type CommandType,
   type MessageType,
@@ -13,7 +13,10 @@ export type GpioPollingCommand =
   | { type: typeof COMMAND_TYPES.STOP };
 
 export type GpioPollingMessage =
-  | { type: typeof MESSAGE_TYPES.DATA; payload: { pin: number; value: number; timestamp: number } }
+  | {
+      type: typeof MESSAGE_TYPES.DATA;
+      payload: { pin: number; value: number; timestamp: number };
+    }
   | { type: typeof MESSAGE_TYPES.ERROR; reason: string }
   | { type: typeof MESSAGE_TYPES.STATUS; status: StatusType; pin?: number };
 

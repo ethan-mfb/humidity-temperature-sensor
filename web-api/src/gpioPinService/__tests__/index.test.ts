@@ -29,7 +29,9 @@ vi.mock("../../childProcessService/index.js", () => ({
 
 // Mock dirname utility
 vi.mock("../../dirname.js", () => ({
-  resolveFromModule: vi.fn(() => "/mock/path/to/gpioPinPollingService/index.js"),
+  resolveFromModule: vi.fn(
+    () => "/mock/path/to/gpioPinPollingService/index.js",
+  ),
 }));
 
 describe("createGpioPinService", () => {

@@ -45,7 +45,10 @@ export function getFilename(importMetaUrl: string): string {
  * const configPath = resolveFromModule(import.meta.url, './config.json');
  * ```
  */
-export function resolveFromModule(importMetaUrl: string, relativePath: string): string {
+export function resolveFromModule(
+  importMetaUrl: string,
+  relativePath: string,
+): string {
   const dirname = getDirname(importMetaUrl);
   return path.resolve(dirname, relativePath);
 }

@@ -62,7 +62,7 @@ export const MESSAGE_TYPES = {
 } as const;
 
 // Type exports for better TypeScript integration
-export type CommandType = typeof COMMAND_TYPES[keyof typeof COMMAND_TYPES];
-export type StatusType = typeof STATUS_TYPES[keyof typeof STATUS_TYPES];
-export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
-export type MessageType = typeof MESSAGE_TYPES[keyof typeof MESSAGE_TYPES];
+export type CommandType = (typeof COMMAND_TYPES)[keyof typeof COMMAND_TYPES];
+export type StatusType = (typeof STATUS_TYPES)[keyof typeof STATUS_TYPES];
+export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];
+export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];

@@ -49,7 +49,10 @@ export function createGpioPinService(): GpioPinService {
       });
 
       onChildProcessEvent(childProcess, EVENT_TYPES.MESSAGE, (event) => {
-        if (event.type === EVENT_TYPES.MESSAGE && isGpioPollingMessage(event.data)) {
+        if (
+          event.type === EVENT_TYPES.MESSAGE &&
+          isGpioPollingMessage(event.data)
+        ) {
           handleChildMessage(event.data);
         }
       });
@@ -109,8 +112,10 @@ export function createGpioPinService(): GpioPinService {
 
         const statusHandler = (status: { status: string; pin?: number }) => {
           if (
-            (command.type === COMMAND_TYPES.START && status.status === STATUS_TYPES.STARTED) ||
-            (command.type === COMMAND_TYPES.STOP && status.status === STATUS_TYPES.STOPPED)
+            (command.type === COMMAND_TYPES.START &&
+              status.status === STATUS_TYPES.STARTED) ||
+            (command.type === COMMAND_TYPES.STOP &&
+              status.status === STATUS_TYPES.STOPPED)
           ) {
             clearTimeout(timeoutId);
             emitter.off(EVENT_TYPES.STATUS, statusHandler);
