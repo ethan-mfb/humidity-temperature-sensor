@@ -5,9 +5,13 @@ import type {
   HumidityPercentage,
   Timestamp,
 } from "../types/nominal-types.js";
+import { TEMP_SENSOR_STATUS } from "./constants.js";
+
+export type TempSensorStatusType =
+  (typeof TEMP_SENSOR_STATUS)[keyof typeof TEMP_SENSOR_STATUS];
 
 export type TempSensorStatus = {
-  status: "running" | "stopped";
+  status: TempSensorStatusType;
   lastError?: { type: string; message: string };
 };
 
@@ -26,3 +30,15 @@ export type TempSensorError =
 export type TempSensorStreamEvent =
   | TempSensorReading
   | { type: "error"; error: TempSensorError };
+
+// Temperature sensor service interface
+export type TempSensorService = {
+  status: TempSensorStatusType;
+  lastError: { type: string; message: string } | undefined;
+  getLatestReading(): Promise<TempSensorReading | TempSensorError>;
+  subscribe(
+    callback: (event: TempSensorReading | TempSensorError) => void,
+  ): () => void;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+};
