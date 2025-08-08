@@ -29,6 +29,8 @@ jobs:
 
       - name: Run tempSensorController tests
         working-directory: web-api
+        env:
+          NODE_OPTIONS: "--experimental-global-webcrypto"
         run: npm run test:once -- src/tempSensorController/
 
       - name: Type check
