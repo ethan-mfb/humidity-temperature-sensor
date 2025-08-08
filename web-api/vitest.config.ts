@@ -6,6 +6,7 @@ export default defineConfig({
     globals: true,
     include: ["src/**/*.test.ts"],
     exclude: ["dist", "node_modules"],
+    setupFiles: ["./vitest.setup.ts"],
   },
   define: {
     global: "globalThis",
