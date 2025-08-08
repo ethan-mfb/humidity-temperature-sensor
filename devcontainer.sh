@@ -6,8 +6,21 @@ IMAGE_NAME=humidity-temp-dev
 CONTAINER_NAME=humidity-temp-devcontainer
 SSH_PORT=2222
 
-# Build the Docker image
-docker build -t $IMAGE_NAME .
+# Check for git user arguments
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <git_user_name> <git_user_email>"
+    echo "Example: $0 \"John Doe\" \"john@example.com\""
+    exit 1
+fi
+
+GIT_USER_NAME="$1"
+GIT_USER_EMAIL="$2"
+
+# Build the Docker image with git user arguments
+docker build -t $IMAGE_NAME \
+    --build-arg GIT_USER_NAME="$GIT_USER_NAME" \
+    --build-arg GIT_USER_EMAIL="$GIT_USER_EMAIL" \
+    .
 
 # Check if the container is running
 if [ "$(docker ps -q -f name=^/${CONTAINER_NAME}$)" ]; then
