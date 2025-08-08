@@ -1,5 +1,4 @@
 import { EventEmitter } from "events";
-import path from "path";
 import {
   startChildProcess,
   stopChildProcess,
@@ -13,6 +12,7 @@ import type {
 } from "./types.js";
 import { isGpioPollingMessage } from "./types.guards.js";
 import { getErrorReason } from "../utils.js";
+import { resolveFromModule } from "../dirname.js";
 import {
   TIMEOUTS,
   COMMAND_TYPES,
@@ -38,9 +38,9 @@ export function createGpioPinService(): GpioPinService {
 
   function ensureChildProcess(): ChildProcessHandle {
     if (!childProcess) {
-      // Use a simple relative path resolution that works in both production and test environments
-      const gpioPinPollingServicePath = path.resolve(
-        path.dirname(new URL(import.meta.url).pathname),
+      // Use ESM-compatible path resolution
+      const gpioPinPollingServicePath = resolveFromModule(
+        import.meta.url,
         "../gpioPinPollingService/index.js",
       );
 
