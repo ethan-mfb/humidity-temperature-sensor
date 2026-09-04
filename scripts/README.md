@@ -5,10 +5,11 @@ included in `npm run package`.
 
 ## `capture-sensor.mjs`
 
-Drives the DHT22/AM2302 start signal, records every GPIO edge of the response
-frame, decodes it, and appends one JSON object per attempt to a JSONL file. The
-output is meant to be copied back to a dev machine and used as fixture data for
-the `tempSensorService` decoder.
+Drives the DHT22/AM2302 start signal and records every GPIO edge the sensor
+produces, appending one JSON object per triggered read to a JSONL file.
+
+It does **not** interpret the signal — it just gets real data off the hardware
+so you have something to work with.
 
 ### Wiring
 
@@ -40,8 +41,6 @@ under `sudo`.
 
 ### Capture
 
-Copy the script over and run it:
-
 ```bash
 # from the dev machine
 scp scripts/capture-sensor.mjs alpha@rpi20w.local:~/sensor-capture/
@@ -51,8 +50,7 @@ cd ~/sensor-capture
 sudo node capture-sensor.mjs --samples 30 --out baseline.jsonl
 ```
 
-Compare what `pigpio` sees against what the current `onoff`-based
-`gpioPinPollingService` can see:
+Capture the same signal through both libraries, to compare what each one sees:
 
 ```bash
 sudo node capture-sensor.mjs --method both --samples 20 --out comparison.jsonl
@@ -65,66 +63,59 @@ Options: `--pin <bcm>`, `--method pigpio|onoff|both`, `--samples <n>`,
 
 ```bash
 # from the dev machine
-scp alpha@rpi20w.local:~/sensor-capture/'*.jsonl' web-api/src/tempSensorService/__tests__/fixtures/
+mkdir -p captures
+scp alpha@rpi20w.local:~/sensor-capture/'*.jsonl' captures/
 ```
 
 ### Output format
 
-One JSON object per line:
+One JSON object per triggered read:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "capturedAt": "2026-09-04T18:22:31.004Z",
   "method": "pigpio",
   "bcmPin": 2,
   "physicalPin": 3,
-  "attempt": 1,
+  "attempt": 2,
+  "startSignalLowUs": 5000,
+  "frameWindowMs": 25,
   "edgeCount": 85,
   "edges": [
-    { "level": 0, "tickUs": 0 },
-    { "level": 1, "tickUs": 5002 }
-  ],
-  "decode": {
-    "ok": true,
-    "bits": "0000001010001100...",
-    "bytes": [2, 140, 1, 15],
-    "dataPulseWidthsUs": [27, 26, 70, 27],
-    "checksumReceived": 158,
-    "checksumComputed": 158,
-    "temperatureC": 27.1,
-    "temperatureF": 80.78,
-    "relativeHumidityPercentage": 65.2,
-    "humidityInRange": true
-  }
+    { "level": 0, "tickUs": 2505000 },
+    { "level": 1, "tickUs": 2510002 },
+    { "level": 0, "tickUs": 2510032 }
+  ]
 }
 ```
 
-`edges` is the fixture input for decoder tests; `decode` is the expected output.
-Failed attempts are written too, with `decode.ok: false` and a `decode.reason`
-of `too-few-edges`, `too-few-pulses`, or `checksum-mismatch` — the lossy and
-corrupt frames are as useful for tests as the clean ones.
+`level` is the logic level **after** the transition; `tickUs` is microseconds
+since the first edge of the capture session — not since the start of this read.
 
-### Reusing the reference decoder in tests
+That matters: the timeline is continuous across every read in a session, so
+concatenating the `edges` arrays of all records for one method replays the whole
+session as a single stream, idle gaps between frames included.
 
-The script exports its pure pieces, so a test can assert that
-`tempSensorService` agrees with it on captured data:
-
-```ts
-import { decodeFrame, DHT22 } from "../../../../scripts/capture-sensor.mjs";
-```
+A read that captured nothing is still written, with `edgeCount: 0` and an empty
+`edges` array. Empty, short and noisy reads are worth keeping alongside the
+clean ones.
 
 ### End-of-run summary
 
-The script prints a per-method summary. `zeroBitPulseUs` and `oneBitPulseUs`
-give the measured separation between a 0 bit and a 1 bit on your hardware, which
-is what the decoder's bit-width threshold constant should be derived from.
-`edgeCount` versus `expectedEdgeCount` (85) shows how many edges a method loses.
+Printed to the console only, never written to the output file:
+
+- `edgesPerRead` — a complete AM2302 frame is 85 edges (host low, release,
+  the sensor's response pulse pair, then 2 edges per data bit). Consistently
+  fewer means edges are being dropped.
+- `edgeIntervalUs` — the spread of gaps between consecutive edges. On a good
+  capture the short end clusters near 26-28us and 70us, the sensor's two
+  pulse widths.
 
 ### Sanity-checking the wiring without this script
 
-If captures fail on every attempt, confirm the sensor is alive using the kernel
-driver, which decodes DHT22 in kernel space:
+If every read comes back empty, confirm the sensor is alive and wired
+correctly using the kernel driver, which talks to the DHT22 in kernel space:
 
 ```bash
 # add to /boot/firmware/config.txt, then reboot
