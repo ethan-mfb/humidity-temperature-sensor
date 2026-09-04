@@ -23,6 +23,16 @@ RUN mkdir -p $NVM_DIR && \
     nvm install --lts && \
     nvm alias default 'lts/*'
 
+# Install the Claude Code CLI globally and expose node/npm/npx/claude on the
+# system PATH so they also work in non-interactive shells (e.g. docker exec)
+RUN . "$NVM_DIR/nvm.sh" && \
+    npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code && \
+    NODE_BIN="$NVM_DIR/versions/node/$(nvm version lts/*)/bin" && \
+    sudo ln -sf "$NODE_BIN/node" "$NODE_BIN/npm" "$NODE_BIN/npx" "$NODE_BIN/claude" /usr/local/bin/
+
+# Pre-create the Claude Code config dir so a mounted volume inherits dev ownership
+RUN mkdir -p /home/dev/.claude
+
 # Set up Node.js in PATH for all users and ensure nvm/node are available in all shells
 RUN echo 'export NVM_DIR="$HOME/.nvm"' > /home/dev/.bashrc_nvm && \
     echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> /home/dev/.bashrc_nvm && \

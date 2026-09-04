@@ -14,6 +14,10 @@ A raspberry pi 0 2 w humidity and temperature sensor
 1. clone the repository (clone into the ubuntu 22 if on windows)
 1. run `./devcontainer.sh`
 
+The image includes the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code/overview). Open a shell in the
+container (`docker exec -it humidity-temp-devcontainer bash`) and run `claude` to start it. The login is stored in the
+`humidity-temp-claude` docker volume, so it survives rebuilding/recreating the container.
+
 ## pi setup
 
 ### Installing the OS
