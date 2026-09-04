@@ -1,10 +1,12 @@
 // Export service factories
 export {
   createTempSensorRestService,
+  tempSensorRestPaths,
   type TempSensorRestService,
 } from "./restService.js";
 export {
   createTempSensorSSEService,
+  tempSensorSSEPaths,
   type TempSensorSSEService,
 } from "./sseService.js";
 

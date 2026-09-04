@@ -2,6 +2,11 @@ import { Request, Response } from "express";
 import type { TempSensorService } from "./types.js";
 import { TEMP_SENSOR_STATUS } from "./constants.js";
 
+/** Route path served by the SSE handler. */
+export const tempSensorSSEPaths = {
+  stream: "/api/temp-sensor/stream",
+} as const;
+
 export interface TempSensorSSEService {
   handlers: {
     stream: (req: Request, res: Response) => void;
@@ -14,9 +19,7 @@ export interface TempSensorSSEService {
 export function createTempSensorSSEService(
   tempSensorService: TempSensorService,
 ): TempSensorSSEService {
-  const paths = {
-    stream: "/api/temp-sensor/stream",
-  };
+  const paths = tempSensorSSEPaths;
 
   const handlers = {
     stream: (

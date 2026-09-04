@@ -1,6 +1,13 @@
 import { Request, Response } from "express";
 import type { TempSensorStatus, TempSensorService } from "./types.js";
 
+/** Route paths served by the REST handlers. */
+export const tempSensorRestPaths = {
+  status: "/api/temp-sensor/status",
+  start: "/api/temp-sensor/start",
+  stop: "/api/temp-sensor/stop",
+} as const;
+
 export interface TempSensorRestService {
   handlers: {
     getStatus: (req: Request, res: Response<TempSensorStatus>) => void;
@@ -17,11 +24,7 @@ export interface TempSensorRestService {
 export function createTempSensorRestService(
   tempSensorService: TempSensorService,
 ): TempSensorRestService {
-  const paths = {
-    status: "/api/temp-sensor/status",
-    start: "/api/temp-sensor/start",
-    stop: "/api/temp-sensor/stop",
-  };
+  const paths = tempSensorRestPaths;
 
   const handlers = {
     getStatus: (_req: Request, res: Response<TempSensorStatus>) => {
