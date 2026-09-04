@@ -10,3 +10,4 @@ export type HumidityPercentage = number & {
 };
 export type Timestamp = string & { readonly __brand: "Timestamp" };
 export type IntervalMs = number & { readonly __brand: "IntervalMs" };
+export type Microseconds = number & { readonly __brand: "Microseconds" };

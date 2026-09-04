@@ -7,6 +7,7 @@ import type {
   HumidityPercentage,
   Timestamp,
   IntervalMs,
+  Microseconds,
 } from "./nominal-types.js";
 
 // Type guard functions for creating nominal types
@@ -63,6 +64,15 @@ export const createIntervalMs = (value: number): IntervalMs => {
   return value as IntervalMs;
 };
 
+export const createMicroseconds = (value: number): Microseconds => {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(
+      `Invalid duration: ${value}. Must be a non-negative finite number.`,
+    );
+  }
+  return value as Microseconds;
+};
+
 // Utility functions for working with nominal types
 export const unwrapGpioPin = (pin: GpioPin): number => pin as number;
 export const unwrapGpioValue = (value: GpioValue): number => value as number;
@@ -77,3 +87,5 @@ export const unwrapTimestamp = (timestamp: Timestamp): string =>
   timestamp as string;
 export const unwrapIntervalMs = (interval: IntervalMs): number =>
   interval as number;
+export const unwrapMicroseconds = (duration: Microseconds): number =>
+  duration as number;
