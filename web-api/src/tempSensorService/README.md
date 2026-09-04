@@ -27,12 +27,25 @@ A high-level service that leverages the GPIO Pin Service to interact with the AM
   - Side-effects (GPIO subscription, timers) are isolated; decoding and validation are pure functions.
 - Errors are returned/emitted as values. Only throw to halt on unrecoverable initialization failures.
 
+## Module Layout
+
+| File                  | Contents                                                               |
+| --------------------- | ---------------------------------------------------------------------- |
+| `index.ts`            | `createTempSensorService` factory, lifecycle and subscription handling |
+| `decoder.ts`          | Pure pipeline: pulses -> bits -> bytes -> checksum -> reading          |
+| `pulseAccumulator.ts` | Groups the GPIO edge stream into frames                                |
+| `reducer.ts`          | Pure reducer over the pipeline events                                  |
+| `constants.ts`        | Target pin, frame layout, pulse widths, sensor ranges, conversions     |
+| `types.ts`            | Service, pipeline and state types                                      |
+| `types.guards.ts`     | `isTempSensorError` runtime guard                                      |
+
 ## TypeScript API
 
-Types should align with existing controller types and nominal types in `src/types/nominal-types.ts`.
+The reading, error and service shapes are owned by
+`src/tempSensorController/types.ts` so that there is a single definition of the
+contract both sides implement; this module re-exports them.
 
 ```typescript
-// Reading and error shapes
 export type TempSensorReading = {
   temperatureC: TemperatureC;
   temperatureF: TemperatureF;
@@ -62,12 +75,19 @@ export type TempSensorService = {
   start(): Promise<void>;
   stop(): Promise<void>;
 };
+
+export function createTempSensorService(dependencies: {
+  gpioPinService: GpioPinService;
+  pin?: GpioPin; // defaults to targetDataGpioPin
+  loggingService?: LoggingService;
+}): TempSensorService;
 ```
 
 Notes:
 
-- Use nominal types: `TemperatureC`, `TemperatureF`, `HumidityPercentage`, `Timestamp` from `src/types/nominal-types.ts`.
-- Use `TEMP_SENSOR_STATUS` from `src/tempSensorController/constants.ts` for status string literal types.
+- Nominal types `TemperatureC`, `TemperatureF`, `HumidityPercentage` and `Timestamp` come from `src/types/nominal-types.ts`; `Microseconds` was added there for pulse widths.
+- `TEMP_SENSOR_STATUS` from `src/tempSensorController/constants.ts` supplies the status string literal types.
+- `status` and `lastError` are exposed as getters so consumers always observe current state.
 
 ## Factory & Dependencies
 
@@ -88,13 +108,16 @@ Example configuration constants live in `src/tempSensorService/constants.ts`.
 
 - Do not throw for recoverable errors (checksum mismatch, transient signal noise, out-of-range values). Surface them as `TempSensorError` events and via `lastError`.
 - Only throw when the process must halt (e.g., unrecoverable startup failure). In other cases, return error objects.
+- `start()` and `stop()` reject with `Already running` and `Already stopped`; the REST controller matches on those messages to answer with 409, so they are part of the contract.
 - In `try/catch` blocks, use `unknown` for the error type and convert with the shared utility `getErrorReason(e)` from `src/utils.ts`.
 
 ## Integration
 
 - On `start()`, call GPIO Pin Service `startPolling(pin)` (pin from config/default constant). Subscribe to GPIO `DATA` events and accumulate/interpret pulses. Maintain `status` as `TEMP_SENSOR_STATUS.RUNNING`.
 - On `stop()`, unsubscribe/cleanup and call GPIO Pin Service `stopPolling()`. Set `status` to `TEMP_SENSOR_STATUS.STOPPED`.
-- `getLatestReading()` returns the latest valid reading or the last error value; it does not throw for checksum errors.
+- `getLatestReading()` resolves with whichever of a reading or an error the most recent frame produced, and with a `signal` error carrying `No reading available yet` before the first frame. It never throws for checksum errors.
+- `lastError` is retained after a later success so the status endpoint can still report it; the most recent outcome is tracked separately.
+- Starting clears any history, since readings from a previous run say nothing about the current one.
 - `subscribe()` immediately begins invoking the callback for each new reading or error.
 - The SSE and REST controllers depend on this contract (`src/tempSensorController/restService.ts`, `src/tempSensorController/sseService.ts`). The SSE layer periodically checks `status` and emits `reading` or `error` events accordingly.
 
