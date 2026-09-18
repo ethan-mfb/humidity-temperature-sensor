@@ -31,15 +31,6 @@ A raspberry pi 0 2 w humidity and temperature sensor
    1. enable the SSH service: `rpi20w.local`
       1. use password authentication
 
-> Lite drops the desktop, browser and office suite, which takes the download from roughly 1.1 GB
-> to 0.4 GB, the card from roughly 9 GB to 2.5 GB, and idle RAM from roughly 250-350 MB to
-> 50-80 MB. The last one is what matters on a 512 MB Zero 2 W.
-
-> Everything this project needs is still in Lite: systemd, NetworkManager for the WLAN settings
-> above, the SSH server, and avahi so `rpi20w.local` resolves. The edit settings dialog behaves
-> the same either way. GPIO is kernel level, so the desktop image would not help the sensor
-> either.
-
 References
 
 - <https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh>
