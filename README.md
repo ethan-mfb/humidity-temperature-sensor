@@ -45,9 +45,28 @@ flashed before publishing anything, because onoff cannot work without it.
 1. `ssh alpha@rpi20w.local`
 1. run `groups` and confirm `gpio` is listed, so the api does not need root
 1. run `ls /sys/class/gpio` and confirm `export` and `unexport` are present
-1. run `echo 4 | sudo tee /sys/class/gpio/export`, then `ls /sys/class/gpio` and confirm `gpio4`
-   appeared
-1. run `echo 4 | sudo tee /sys/class/gpio/unexport` to clean up
+1. identify the header chip and read its base
+
+   ```sh
+   ls /sys/class/gpio                      # chip0  export  gpiochip512  unexport
+   cat /sys/class/gpio/gpiochip512/label   # pinctrl-bcm2835
+   cat /sys/class/gpio/gpiochip512/base    # 512
+   cat /sys/class/gpio/gpiochip512/ngpio   # 54
+   ```
+
+1. export a pin using its kernel number, base + BCM, with no `sudo`
+
+   ```sh
+   echo 516 > /sys/class/gpio/export
+   cat /sys/class/gpio/gpio516/direction   # in
+   echo 516 > /sys/class/gpio/unexport
+   ```
+
+> sysfs numbers are kernel global, not BCM numbers, so `echo 4` fails with `Invalid argument` here.
+> See [GPIO numbering](#gpio-numbering) for the arithmetic and the values measured on this device.
+
+> No `sudo` in that second block on purpose. The api runs unprivileged as `alpha` under systemd, so
+> unprivileged export is the access that actually has to work.
 
 > If `/sys/class/gpio` is missing then the kernel dropped sysfs GPIO and onoff is a dead end on
 > that image, desktop or Lite. The replacement would be a libgpiod backed binding such as
@@ -163,6 +182,39 @@ References
 ## raspberry pi 0 2 spec
 
 ![rpi pin out](./assets/pinout.jpeg)
+
+### GPIO numbering
+
+The sysfs interface numbers pins globally across every gpiochip in the kernel, not by BCM number.
+Older kernels gave the pi's pinctrl chip a fixed base of 0, which made the two numbering schemes
+line up by accident. Current kernels allocate chip bases dynamically from `GPIO_DYNAMIC_BASE`
+(512), so they no longer match.
+
+```text
+kernel gpio number = chip base + BCM number
+516                = 512       + 4
+```
+
+Measured on this device, a Pi Zero 2 W running Raspberry Pi OS Lite (64-bit):
+
+|       |                               |
+| ----- | ----------------------------- |
+| chip  | `/sys/class/gpio/gpiochip512` |
+| label | `pinctrl-bcm2835`             |
+| base  | 512                           |
+| ngpio | 54                            |
+| BCM 4 | sysfs 516                     |
+
+> Do not treat 512 as a constant. The base is dynamically allocated and can move across a kernel
+> update or a different board, so read it back from `/sys/class/gpio/gpiochip*/base`. The directory
+> is named after its own base, so `ls /sys/class/gpio` already shows it.
+
+> `ls /sys/class/gpio` also lists a `chip0` entry. It does not follow the `gpiochip<base>` naming
+> the sysfs interface documents, and nothing here depends on it.
+
+> Known gap: onoff passes its pin argument straight through to sysfs, so `new Gpio(4, ...)` in
+> `gpioPinPollingService` fails with `EINVAL` on this kernel. The base offset is not applied
+> anywhere in the code yet.
 
 ## sensor spec
 
