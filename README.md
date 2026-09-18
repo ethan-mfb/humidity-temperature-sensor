@@ -20,15 +20,16 @@ A raspberry pi 0 2 w humidity and temperature sensor
 
 ### Installing the OS
 
-1. install imager
+1. download and install [imager](https://www.raspberrypi.com/software/)
 1. select the Raspberry Pi OS (64-bit) image
 1. click edit settings
    1. set hostname: `rpi20w`
    1. username: `alpha`
-   1. password
-   1. WLAN: asus 2G
+   1. password (check password manager)
+   1. WLAN
    1. locale
    1. enable the SSH service: `rpi20w.local`
+      1. use password authentication
 
 References
 
