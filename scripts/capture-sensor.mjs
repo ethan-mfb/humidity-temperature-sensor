@@ -5,12 +5,22 @@
  * Runs standalone on the Raspberry Pi. Drives the sensor's start signal and
  * records every GPIO edge it produces. It does not interpret the signal: the
  * output is the raw edge stream, meant to be copied back to a dev machine and
- * replayed.
+ * replayed against the decoder in web-api/src/tempSensorService.
+ *
+ * The timing-critical part lives in the gpiod-capture helper; this script owns
+ * sampling, output and analysis. See scripts/README.md for why that split
+ * exists.
  *
  * Usage: node capture-sensor.mjs --help
  */
 
-import { pathToFileURL } from "url";
+import { execFile } from "child_process";
+import { access, appendFile, writeFile } from "fs/promises";
+import { promisify } from "util";
+import { dirname } from "path";
+import { fileURLToPath, pathToFileURL } from "url";
+
+const execFileAsync = promisify(execFile);
 
 /** Host-side signalling constants from the AM2302 datasheet. */
 const DHT22 = {
@@ -22,24 +32,22 @@ const DHT22 = {
   MIN_READ_INTERVAL_MS: 2000,
 };
 
-const CAPTURE_METHODS = {
-  PIGPIO: "pigpio",
-  ONOFF: "onoff",
-  BOTH: "both",
-};
-
-const GPIO_LEVELS = {
-  LOW: 0,
-  HIGH: 1,
-};
-
 const DEFAULTS = {
   /** BCM GPIO 2 == physical header pin 3, the data pin in README "Connecting the sensor". */
   BCM_PIN: 2,
-  METHOD: CAPTURE_METHODS.PIGPIO,
   SAMPLES: 20,
   INTERVAL_MS: 2500,
 };
+
+/**
+ * The capture method is no longer selectable. pigpio was removed from Raspberry
+ * Pi OS at trixie and onoff's sysfs interface is deprecated; libgpiod is the
+ * supported character-device path and the only one that survives here.
+ */
+const CAPTURE_METHOD = "libgpiod";
+
+/** Timestamps come from the kernel's edge IRQ handler, not the Node event loop. */
+const TIMESTAMP_SOURCE = "kernel-monotonic";
 
 /** BCM GPIO number -> physical header pin, for the pins this project uses. */
 const BCM_TO_PHYSICAL_PIN = {
@@ -51,9 +59,15 @@ const BCM_TO_PHYSICAL_PIN = {
   22: 15,
 };
 
-const SCHEMA_VERSION = 2;
+const HELPER_NAME = "gpiod-capture";
+const HELPER_BUILD_COMMAND = `gcc -O2 -Wall -Wextra -std=gnu17 -o ${HELPER_NAME} ${HELPER_NAME}.c $(pkg-config --cflags --libs libgpiod)`;
 
-const NANOSECONDS_PER_MICROSECOND = 1000n;
+const SCHEMA_VERSION = 3;
+
+const NANOSECONDS_PER_MICROSECOND = 1000;
+
+/** The helper reports the chip it resolved on stderr; this lifts it back out. */
+const RESOLVED_CHIP_PATTERN = /on (\S+) line/;
 
 const text = {
   help: `
@@ -63,35 +77,27 @@ Capture the raw DHT22/AM2302 GPIO edge stream on a Raspberry Pi.
 
 Options
   --pin <bcm>        BCM GPIO number of the sensor data line (default: ${DEFAULTS.BCM_PIN}, physical pin 3)
-  --method <name>    pigpio | onoff | both (default: ${DEFAULTS.METHOD})
-  --samples <n>      Start signals to send per method (default: ${DEFAULTS.SAMPLES})
+  --samples <n>      Start signals to send (default: ${DEFAULTS.SAMPLES})
   --interval <ms>    Delay between start signals (default: ${DEFAULTS.INTERVAL_MS}, sensor minimum is ${DHT22.MIN_READ_INTERVAL_MS})
+  --chip <path>      Explicit gpiochip, e.g. /dev/gpiochip0 (default: resolve by label)
+  --chip-label <s>   Chip label to resolve (default: the helper's pinctrl-bcm2835)
   --out <file>       Output JSONL path (default: sensor-capture-<timestamp>.jsonl)
   --help             Show this message
 
 Notes
   - This tool records edges only; it does not interpret the signal.
-  - pigpio timestamps edges in its DMA sampler and is the only method with
-    enough timing resolution to represent DHT22 pulse widths. It requires root.
-  - onoff timestamps edges in the Node event loop. It is included so you can
-    measure how much timing detail the current gpioPinPollingService loses.
+  - Line offsets on the character device are BCM numbers. The +512 sysfs base
+    offset does not apply here.
+  - No sudo required: /dev/gpiochip* is reachable through the gpio group.
 `,
-};
 
-/**
- * Blocks the thread for the given number of microseconds.
- * Needed for the start signal: setTimeout cannot resolve at this granularity.
- * @param {number} microseconds
- * @returns {void}
- */
-function busyWaitMicroseconds(microseconds) {
-  const deadline =
-    process.hrtime.bigint() +
-    BigInt(microseconds) * NANOSECONDS_PER_MICROSECOND;
-  while (process.hrtime.bigint() < deadline) {
-    // intentionally spinning; the start pulse must be timed in microseconds
-  }
-}
+  helperMissing: (helperPath, helperDir) =>
+    `Capture helper not found at ${helperPath}.\n` +
+    `Build it on the pi first:\n\n` +
+    `  sudo apt install -y build-essential libgpiod-dev pkg-config\n` +
+    `  cd ${helperDir}\n` +
+    `  ${HELPER_BUILD_COMMAND}\n`,
+};
 
 /**
  * @param {number} milliseconds
@@ -102,120 +108,109 @@ function delay(milliseconds) {
 }
 
 /**
- * Accumulates edges on a timeline that starts at the session's first edge.
- * Deltas are folded into a running total so pigpio's uint32 microsecond tick
- * can wrap (every ~71 minutes) without corrupting or overflowing the timeline.
- * @returns {{ record: (level: number, tick: number) => void, drain: () => Array<{ level: number, tickUs: number }> }}
+ * Places edges on a timeline that starts at the session's first edge.
+ *
+ * The helper emits absolute CLOCK_MONOTONIC nanoseconds, which keeps running
+ * across invocations, so a session spanning many helper runs stays one
+ * continuous timeline with the idle gaps between frames intact.
+ * @returns {{ place: (samples: ReadonlyArray<{ level: number, timestampNs: number }>) => Array<{ level: number, tickUs: number, tickNs: number }> }}
  */
 function createEdgeTimeline() {
-  let previousTick = null;
-  let elapsedUs = 0;
-  let edges = [];
+  let sessionStartNs = null;
 
   return {
-    record(level, tick) {
-      if (previousTick !== null) {
-        // `>>> 0` keeps the delta unsigned, so a gap wider than 2^31us stays positive.
-        elapsedUs += (tick - previousTick) >>> 0;
-      }
-      previousTick = tick;
-      edges.push({ level, tickUs: elapsedUs });
-    },
-    drain() {
-      const drained = edges;
-      edges = [];
-      return drained;
+    place(samples) {
+      return samples.map((sample) => {
+        if (sessionStartNs === null) {
+          sessionStartNs = sample.timestampNs;
+        }
+        const tickNs = sample.timestampNs - sessionStartNs;
+        return {
+          level: sample.level,
+          tickUs: Math.round(tickNs / NANOSECONDS_PER_MICROSECOND),
+          tickNs,
+        };
+      });
     },
   };
 }
 
 /**
- * Dynamically loads a CommonJS GPIO library, tolerating the default-export wrapper.
- * @param {string} moduleName
- * @returns {Promise<Record<string, unknown>>}
+ * Parses the helper's stdout: one "<level> <timestamp_ns>" per edge.
+ * @param {string} stdout
+ * @returns {Array<{ level: number, timestampNs: number }>}
  */
-async function loadGpioModule(moduleName) {
-  const loaded = await import(moduleName);
-  return loaded.default ?? loaded;
-}
-
-/**
- * Opens a capture session backed by pigpio's DMA-sampled, hardware-timestamped alerts.
- * The listener stays attached for the whole session, so the idle gaps between
- * frames are preserved in the timeline.
- * @param {{ bcmPin: number, pigpio: Record<string, unknown> }} options
- * @returns {{ triggerRead: () => Promise<void>, drain: () => Array<{ level: number, tickUs: number }>, close: () => void }}
- */
-function createPigpioSession(options) {
-  const { Gpio } = options.pigpio;
-  const pin = new Gpio(options.bcmPin, {
-    mode: Gpio.INPUT,
-    pullUpDown: Gpio.PUD_UP,
-    alert: true,
-  });
-  pin.glitchFilter(0);
-
-  const timeline = createEdgeTimeline();
-  pin.on("alert", (level, tick) => timeline.record(level, tick));
-
-  return {
-    async triggerRead() {
-      pin.mode(Gpio.OUTPUT);
-      pin.digitalWrite(GPIO_LEVELS.LOW);
-      busyWaitMicroseconds(DHT22.START_SIGNAL_LOW_US);
-      pin.mode(Gpio.INPUT);
-      pin.pullUpDown(Gpio.PUD_UP);
-      await delay(DHT22.FRAME_WINDOW_MS);
-    },
-    drain: timeline.drain,
-    close() {
-      pin.removeAllListeners("alert");
-      if (typeof options.pigpio.terminate === "function") {
-        options.pigpio.terminate();
-      }
-    },
-  };
-}
-
-/**
- * Opens a capture session backed by onoff, timestamping edges in the Node event
- * loop. This mirrors what gpioPinPollingService can observe today.
- * @param {{ bcmPin: number, onoff: Record<string, unknown> }} options
- * @returns {{ triggerRead: () => Promise<void>, drain: () => Array<{ level: number, tickUs: number }>, close: () => void }}
- */
-function createOnoffSession(options) {
-  const { Gpio } = options.onoff;
-  const pin = new Gpio(options.bcmPin, "in", "both", {
-    reconfigureDirection: true,
-  });
-
-  const timeline = createEdgeTimeline();
-  const startedAt = process.hrtime.bigint();
-  pin.watch((error, value) => {
-    if (error) {
-      return;
-    }
-    timeline.record(
-      value,
-      Number(
-        (process.hrtime.bigint() - startedAt) / NANOSECONDS_PER_MICROSECOND,
-      ),
+function parseHelperOutput(stdout) {
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const [level, timestampNs] = line.split(/\s+/);
+      return { level: Number(level), timestampNs: Number(timestampNs) };
+    })
+    .filter(
+      (sample) =>
+        Number.isFinite(sample.level) && Number.isFinite(sample.timestampNs),
     );
-  });
+}
+
+/**
+ * Opens a capture session backed by the libgpiod helper.
+ *
+ * Each read spawns the helper once. Spawn cost is a few milliseconds against a
+ * read interval measured in seconds, and it keeps the line unowned between
+ * reads so nothing else on the pi is locked out.
+ * @param {{ bcmPin: number, helperPath: string, chipPath?: string, chipLabel?: string }} options
+ * @returns {{ readFrame: () => Promise<{ edges: Array<{ level: number, tickUs: number, tickNs: number }>, resolvedChip: string | null, error: { message: string, cause: unknown } | null }> }}
+ */
+function createLibgpiodSession(options) {
+  const timeline = createEdgeTimeline();
+
+  const helperArgs = [
+    "--line",
+    String(options.bcmPin),
+    "--start-low-us",
+    String(DHT22.START_SIGNAL_LOW_US),
+    "--frame-window-ms",
+    String(DHT22.FRAME_WINDOW_MS),
+    ...(options.chipPath === undefined ? [] : ["--chip", options.chipPath]),
+    ...(options.chipLabel === undefined
+      ? []
+      : ["--chip-label", options.chipLabel]),
+  ];
 
   return {
-    async triggerRead() {
-      pin.setDirection("out");
-      pin.writeSync(GPIO_LEVELS.LOW);
-      busyWaitMicroseconds(DHT22.START_SIGNAL_LOW_US);
-      pin.setDirection("in");
-      pin.setEdge("both");
-      await delay(DHT22.FRAME_WINDOW_MS);
-    },
-    drain: timeline.drain,
-    close() {
-      pin.unwatchAll();
-      pin.unexport();
+    async readFrame() {
+      try {
+        const { stdout, stderr } = await execFileAsync(
+          options.helperPath,
+          helperArgs,
+        );
+        const resolvedChip = RESOLVED_CHIP_PATTERN.exec(stderr);
+        return {
+          edges: timeline.place(parseHelperOutput(stdout)),
+          resolvedChip: resolvedChip === null ? null : resolvedChip[1],
+          error: null,
+        };
+      } catch (error) {
+        // A failed read is expected and recoverable; the run continues and the
+        // empty record is kept, because a read that captured nothing is data.
+        // The helper's own diagnostic leads, because it is the actionable part;
+        // the exec failure that wraps it is only ever "Command failed: <argv>".
+        const reason =
+          error instanceof Error ? error.message : "Unknown helper failure";
+        const details =
+          typeof error?.stderr === "string" ? error.stderr.trim() : "";
+        return {
+          edges: [],
+          resolvedChip: null,
+          error: {
+            message: details.length === 0 ? reason : `${details}\n${reason}`,
+            cause: error,
+          },
+        };
+      }
     },
   };
 }
@@ -249,23 +244,17 @@ function toEdgeIntervals(edges) {
  * Console-only description of what was captured. Nothing here is written to the
  * output file, and none of it interprets the signal.
  * @param {ReadonlyArray<Record<string, unknown>>} records
- * @param {string} method
  * @returns {Record<string, unknown>}
  */
-function summarize(records, method) {
-  const forMethod = records.filter((record) => record.method === method);
-  const intervals = forMethod.flatMap((record) =>
-    toEdgeIntervals(record.edges),
-  );
+function summarize(records) {
+  const intervals = records.flatMap((record) => toEdgeIntervals(record.edges));
 
   return {
-    method,
-    startSignalsSent: forMethod.length,
-    totalEdges: forMethod.reduce(
-      (total, record) => total + record.edgeCount,
-      0,
-    ),
-    edgesPerRead: describe(forMethod.map((record) => record.edgeCount)),
+    method: CAPTURE_METHOD,
+    startSignalsSent: records.length,
+    failedReads: records.filter((record) => record.error !== null).length,
+    totalEdges: records.reduce((total, record) => total + record.edgeCount, 0),
+    edgesPerRead: describe(records.map((record) => record.edgeCount)),
     edgeIntervalUs: describe(intervals),
   };
 }
@@ -298,7 +287,6 @@ async function main() {
   }
 
   const bcmPin = Number(args.pin ?? DEFAULTS.BCM_PIN);
-  const method = args.method ?? DEFAULTS.METHOD;
   const samples = Number(args.samples ?? DEFAULTS.SAMPLES);
   const intervalMs = Math.max(
     Number(args.interval ?? DEFAULTS.INTERVAL_MS),
@@ -308,88 +296,82 @@ async function main() {
     args.out ??
     `sensor-capture-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`;
 
-  if (!Object.values(CAPTURE_METHODS).includes(method)) {
+  const helperPath = fileURLToPath(new URL(HELPER_NAME, import.meta.url));
+
+  try {
+    await access(helperPath);
+  } catch (error) {
     // Unrecoverable: there is nothing to capture with.
-    throw new Error(
-      `Unknown --method "${method}". Expected one of: ${Object.values(CAPTURE_METHODS).join(", ")}.`,
-    );
+    throw new Error(text.helperMissing(helperPath, dirname(helperPath)), {
+      cause: error,
+    });
   }
 
-  const { appendFile, writeFile } = await import("fs/promises");
   await writeFile(outPath, "");
 
-  const methods =
-    method === CAPTURE_METHODS.BOTH
-      ? [CAPTURE_METHODS.PIGPIO, CAPTURE_METHODS.ONOFF]
-      : [method];
+  const session = createLibgpiodSession({
+    bcmPin,
+    helperPath,
+    chipPath: args.chip,
+    chipLabel: args["chip-label"],
+  });
 
   console.log(
-    `Capturing ${samples} read(s) per method [${methods.join(", ")}] on BCM GPIO ${bcmPin} ` +
+    `Capturing ${samples} read(s) on BCM GPIO ${bcmPin} ` +
       `(physical pin ${BCM_TO_PHYSICAL_PIN[bcmPin] ?? "unknown"}) every ${intervalMs}ms -> ${outPath}`,
   );
 
   const records = [];
 
-  for (const activeMethod of methods) {
-    const isPigpio = activeMethod === CAPTURE_METHODS.PIGPIO;
+  for (let attempt = 1; attempt <= samples; attempt += 1) {
+    const { edges, resolvedChip, error } = await session.readFrame();
 
-    if (isPigpio && process.getuid !== undefined && process.getuid() !== 0) {
-      console.warn(
-        "pigpio needs direct peripheral access; re-run with sudo if the next step fails.",
-      );
-    }
+    const record = {
+      schemaVersion: SCHEMA_VERSION,
+      capturedAt: new Date().toISOString(),
+      method: CAPTURE_METHOD,
+      timestampSource: TIMESTAMP_SOURCE,
+      bcmPin,
+      physicalPin: BCM_TO_PHYSICAL_PIN[bcmPin] ?? null,
+      chip: resolvedChip,
+      attempt,
+      startSignalLowUs: DHT22.START_SIGNAL_LOW_US,
+      frameWindowMs: DHT22.FRAME_WINDOW_MS,
+      edgeCount: edges.length,
+      error: error === null ? null : error.message,
+      edges,
+    };
+    records.push(record);
+    await appendFile(outPath, `${JSON.stringify(record)}\n`);
 
-    const gpioModule = await loadGpioModule(activeMethod);
-    const session = isPigpio
-      ? createPigpioSession({ bcmPin, pigpio: gpioModule })
-      : createOnoffSession({ bcmPin, onoff: gpioModule });
+    const [firstEdge] = edges;
+    const lastEdge = edges[edges.length - 1];
+    const spanUs =
+      firstEdge === undefined ? 0 : lastEdge.tickUs - firstEdge.tickUs;
+    console.log(
+      `[${attempt}/${samples}] edges=${edges.length} span=${spanUs}us` +
+        (error === null ? "" : ` error=${error.message.split("\n")[0]}`),
+    );
 
-    try {
-      for (let attempt = 1; attempt <= samples; attempt += 1) {
-        await session.triggerRead();
-        const edges = session.drain();
-        const record = {
-          schemaVersion: SCHEMA_VERSION,
-          capturedAt: new Date().toISOString(),
-          method: activeMethod,
-          bcmPin,
-          physicalPin: BCM_TO_PHYSICAL_PIN[bcmPin] ?? null,
-          attempt,
-          startSignalLowUs: DHT22.START_SIGNAL_LOW_US,
-          frameWindowMs: DHT22.FRAME_WINDOW_MS,
-          edgeCount: edges.length,
-          edges,
-        };
-        records.push(record);
-        await appendFile(outPath, `${JSON.stringify(record)}\n`);
-
-        const [firstEdge] = edges;
-        const lastEdge = edges[edges.length - 1];
-        const spanUs =
-          firstEdge === undefined ? 0 : lastEdge.tickUs - firstEdge.tickUs;
-        console.log(
-          `[${activeMethod} ${attempt}/${samples}] edges=${edges.length} span=${spanUs}us`,
-        );
-
-        if (attempt < samples) {
-          await delay(intervalMs);
-        }
-      }
-    } finally {
-      session.close();
+    if (attempt < samples) {
+      await delay(intervalMs);
     }
   }
 
-  const summaries = methods.map((activeMethod) =>
-    summarize(records, activeMethod),
-  );
   console.log("\nSummary");
-  console.log(JSON.stringify(summaries, null, 2));
+  console.log(JSON.stringify(summarize(records), null, 2));
   console.log(`\nWrote ${records.length} record(s) to ${outPath}`);
 }
 
 /** Exported for unit testing; the capture itself only runs when invoked directly. */
-export { createEdgeTimeline, toEdgeIntervals, summarize, parseArgs, describe };
+export {
+  createEdgeTimeline,
+  parseHelperOutput,
+  toEdgeIntervals,
+  summarize,
+  parseArgs,
+  describe,
+};
 
 const isRunDirectly =
   process.argv[1] !== undefined &&

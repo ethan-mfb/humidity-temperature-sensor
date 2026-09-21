@@ -42,6 +42,14 @@ onoff reaches the pins through the sysfs interface (`/sys/class/gpio`), which th
 deprecated in favour of the gpiochip character device. Confirm it still exists on the image you
 flashed before publishing anything, because onoff cannot work without it.
 
+> **Unresolved on trixie.** Current imager builds are Raspberry Pi OS trixie, which is newer than
+> the image these steps were written against. Two things changed there: `pigpio` was dropped from
+> the archive entirely, and sysfs GPIO is a kernel config away from disappearing. Run the checks
+> below on your own image before trusting any of it. If `/sys/class/gpio` is gone, onoff is a dead
+> end and the `web-api` needs to move to the character device — `scripts/` has already made that
+> move, see [scripts/README.md](./scripts/README.md#why-there-is-a-c-helper). That migration is
+> deliberately not done yet; capture data first, then decide.
+
 1. `ssh alpha@rpi20w.local`
 1. run `groups` and confirm `gpio` is listed, so the api does not need root
 1. run `ls /sys/class/gpio` and confirm `export` and `unexport` are present
@@ -69,8 +77,12 @@ flashed before publishing anything, because onoff cannot work without it.
 > unprivileged export is the access that actually has to work.
 
 > If `/sys/class/gpio` is missing then the kernel dropped sysfs GPIO and onoff is a dead end on
-> that image, desktop or Lite. The replacement would be a libgpiod backed binding such as
-> node-libgpiod or opengpio.
+> that image, desktop or Lite. The replacement is libgpiod — but not, as this note used to claim,
+> via node-libgpiod or opengpio. Both were checked against this sensor and neither can carry a DHT22
+> frame: node-libgpiod builds against the v1 API that trixie no longer ships, and opengpio discards
+> the kernel edge timestamp. See
+> [scripts/README.md](./scripts/README.md#why-there-is-a-c-helper) for the details and the working
+> approach.
 
 > The `gpio` group membership comes from udev rules in `raspberrypi-sys-mods`, which Lite has. The
 > service unit below runs as `User=alpha` and systemd grants supplementary groups by default, so
@@ -120,6 +132,50 @@ References
 > `npm install --omit=dev` compiles the epoll native addon on the pi, so it needs the build tools
 > from the node install step. Node 16 headers against a current gcc is the usual reason this step
 > fails.
+
+### Publishing the capture tooling
+
+`scripts/` holds the DHT22 signal capture tool, used to get raw edge data off the hardware and
+replay it against the decoder. It ships separately from the api: it is deliberately excluded from
+`npm run package`, nothing in `web-api` depends on it, and it is not needed for the service to run.
+Publish it when you need to diagnose the sensor, not on every release.
+
+1. `ssh alpha@rpi20w.local`
+1. run `sudo apt install -y build-essential libgpiod-dev pkg-config gpiod`
+1. run `mkdir -p ~/sensor-capture`, then from the dev machine:
+
+   ```sh
+   scp scripts/capture-sensor.mjs scripts/gpiod-capture.c alpha@rpi20w.local:~/sensor-capture/
+   ```
+
+1. `cd ~/sensor-capture`
+1. build the capture helper
+
+   ```sh
+   gcc -O2 -Wall -Wextra -std=gnu17 -o gpiod-capture gpiod-capture.c \
+     $(pkg-config --cflags --libs libgpiod)
+   ```
+
+1. run `node capture-sensor.mjs --samples 30 --out baseline.jsonl` to capture, with no `sudo`
+
+> `-std=gnu17` pins the language standard instead of taking the compiler's default. It is a no-op
+> for trixie's gcc 14, which already defaults to gnu17, and it is there for the case where the helper
+> gets built somewhere newer: gcc 15 defaults to C23, which remaps `strtoul` to `__isoc23_strtoul`
+> and raises the binary's glibc floor from 2.34 to 2.38. Trixie ships 2.41 so either clears it today,
+> but the floor moves silently as libc calls are added, and this keeps it still.
+
+> Build on the pi. The helper is ~400 lines against one library and compiles in about a second even
+> on a Zero 2 W, which removes any question of architecture or library version. If you do build it
+> in the dev container, check `uname -m` matches the pi first — `Dockerfile` is `FROM ubuntu:latest`,
+> so the container inherits the host's architecture, and an x86_64 host produces a binary the pi
+> cannot run. `-static` with `pkg-config --static` is the portable escape hatch if you need one.
+
+> No `sudo`, unlike the pigpio-based tool this replaced. `/dev/gpiochip*` is reachable through the
+> `gpio` group. If you do reach for `sudo`, it resets `PATH` to its `secure_path` and will not find
+> nvm's node, so it would have to be `sudo $(which node) …`.
+
+See [scripts/README.md](./scripts/README.md) for the output format, the end-of-run summary and why
+the timing-critical part is a C helper rather than a node binding.
 
 ### Running the web-api as a service
 
@@ -215,6 +271,12 @@ Measured on this device, a Pi Zero 2 W running Raspberry Pi OS Lite (64-bit):
 > Known gap: onoff passes its pin argument straight through to sysfs, so `new Gpio(4, ...)` in
 > `gpioPinPollingService` fails with `EINVAL` on this kernel. The base offset is not applied
 > anywhere in the code yet.
+
+> This whole section is sysfs-only arithmetic. On the gpiochip character device, line offsets **are**
+> BCM numbers — `--pin 2` means BCM 2 — so moving `gpioPinPollingService` to libgpiod deletes the
+> problem rather than fixing it. `scripts/gpiod-capture.c` already works this way. Two further
+> consequences worth weighing when that migration is scheduled: it would drop the `onoff` dependency,
+> and onoff is the only reason this project is pinned to Node v16.
 
 ## sensor spec
 
