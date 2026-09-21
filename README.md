@@ -97,7 +97,7 @@ References
 
 1. `ssh alpha@rpi20w.local`
 1. run `sudo apt update` and `sudo apt upgrade`
-1. run `sudo apt install -y build-essential python3`
+1. run `sudo apt install -y build-essential python3 libgpiod-dev pkg-config gpiod`
 1. run `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash`
 1. run the following from the install:
 
@@ -140,8 +140,7 @@ replay it against the decoder. It ships separately from the api: it is deliberat
 `npm run package`, nothing in `web-api` depends on it, and it is not needed for the service to run.
 Publish it when you need to diagnose the sensor, not on every release.
 
-1. `ssh alpha@rpi20w.local`
-1. run `sudo apt install -y build-essential libgpiod-dev pkg-config gpiod`
+1. `ssh alpha@rpi20w.local``
 1. run `mkdir -p ~/sensor-capture`, then from the dev machine:
 
    ```sh
