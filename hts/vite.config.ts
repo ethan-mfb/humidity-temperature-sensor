@@ -34,6 +34,11 @@ export default defineConfig({
         // the whole precache.
         globPatterns: ["**/*.{js,css,html,svg,png,ico}"],
         cleanupOutdatedCaches: true,
+        // Without this, a tab opened before the first service worker installed
+        // is never controlled by one, so accepting an update in that tab
+        // activates the new worker but never hands it the page. The new worker
+        // still waits for the user before activating.
+        clientsClaim: true,
       },
       devOptions: { enabled: false },
     }),

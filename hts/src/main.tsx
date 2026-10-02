@@ -21,7 +21,12 @@ if (rootElement === null) {
 
 const store = createStore(pwaReducer, initialPwaState);
 const service = createPwaService({
-  serviceWorker: createWorkboxServiceWorker({ registerSW }),
+  serviceWorker: createWorkboxServiceWorker({
+    registerSW,
+    ...("serviceWorker" in navigator && {
+      serviceWorkerContainer: navigator.serviceWorker,
+    }),
+  }),
   installPrompt: createBrowserInstallPrompt(window),
   dispatch: store.dispatch,
 });

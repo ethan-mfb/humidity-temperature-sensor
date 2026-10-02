@@ -6,14 +6,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "test:once": "vitest run",
     "test:watch": "vitest watch",
-    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint .",
-    "check-formatting": "prettier --check \"src/**/*.{ts,tsx,scss,json,md}\" \"*.{ts,js,json,md}\"",
-    "fix-formatting": "prettier --write \"src/**/*.{ts,tsx,scss,json,md}\" \"*.{ts,js,json,md}\""
+    "check-formatting": "prettier --check \"src/**/*.{ts,tsx,scss,json,md}\" \"e2e/**/*.ts\" \"*.{ts,js,json,md}\"",
+    "fix-formatting": "prettier --write \"src/**/*.{ts,tsx,scss,json,md}\" \"e2e/**/*.ts\" \"*.{ts,js,json,md}\""
   },
   "author": "Ethan Lemke",
   "license": "MIT",
@@ -27,9 +28,11 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
+    "@types/node": "24.19.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vite-pwa/assets-generator": "1.0.2",

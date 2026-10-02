@@ -41,14 +41,30 @@ describe("createWorkboxServiceWorker", () => {
     expect(handlers.onOfflineReady).toHaveBeenCalledOnce();
   });
 
-  it("activates the waiting worker and reloads", async () => {
+  it("activates the waiting worker and reloads once it takes control", async () => {
     const fake = createFakeRegisterSW();
+    const serviceWorkerContainer = new EventTarget();
+    const reload = vi.fn();
     const serviceWorker = createWorkboxServiceWorker({
       registerSW: fake.registerSW,
+      serviceWorkerContainer,
+      reload,
     });
     serviceWorker.register(handlers);
     await serviceWorker.activateUpdate();
-    expect(fake.updateSW).toHaveBeenCalledWith(true);
+    expect(fake.updateSW).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+    serviceWorkerContainer.dispatchEvent(new Event("controllerchange"));
+    serviceWorkerContainer.dispatchEvent(new Event("controllerchange"));
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the reload to the adapter, not the plugin", () => {
+    const fake = createFakeRegisterSW();
+    createWorkboxServiceWorker({ registerSW: fake.registerSW }).register(
+      handlers,
+    );
+    expect(fake.options().onNeedReload).toEqual(expect.any(Function));
   });
 
   it("rejects activating an update before registering", async () => {

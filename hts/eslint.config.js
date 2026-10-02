@@ -19,7 +19,16 @@ const layerImportRule = (forbiddenLayers) => [
 ];
 
 export default tseslint.config(
-  { ignores: ["dist", "dev-dist", "node_modules"] },
+  {
+    ignores: [
+      "dist",
+      "dev-dist",
+      "node_modules",
+      "e2e/.builds",
+      "test-results",
+      "playwright-report",
+    ],
+  },
   {
     files: ["**/*.{ts,tsx}"],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

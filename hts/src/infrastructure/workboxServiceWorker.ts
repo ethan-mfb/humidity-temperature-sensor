@@ -11,12 +11,18 @@ export type RegisterSW = (
 // finds a new version when it is next launched.
 export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
+const CONTROLLER_CHANGE = "controllerchange";
+
 const text = {
   notRegistered: "The service worker has not been registered",
 };
 
 export type WorkboxServiceWorkerOptions = Readonly<{
   registerSW: RegisterSW;
+  // navigator.serviceWorker, where the browser reports a new controller.
+  // Undefined where service workers are unsupported, such as plain http.
+  serviceWorkerContainer?: EventTarget;
+  reload?: () => void;
   setInterval?: (callback: () => void, ms: number) => unknown;
 }>;
 
@@ -24,6 +30,7 @@ export function createWorkboxServiceWorker(
   options: WorkboxServiceWorkerOptions,
 ): ServiceWorkerPort {
   const schedule = options.setInterval ?? globalThis.setInterval;
+  const reload = options.reload ?? (() => window.location.reload());
   const state: { updateSW?: (reloadPage?: boolean) => Promise<void> } = {};
 
   return Object.freeze({
@@ -31,6 +38,10 @@ export function createWorkboxServiceWorker(
       state.updateSW = options.registerSW({
         onNeedRefresh: handlers.onUpdateFound,
         onOfflineReady: handlers.onOfflineReady,
+        // The plugin only reloads when the page was already controlled when
+        // it loaded, so a first visit would never reload onto an update.
+        // activateUpdate reloads instead.
+        onNeedReload: () => undefined,
         onRegisteredSW: (_swUrl, registration) => {
           if (registration === undefined) return;
           schedule(() => {
@@ -42,9 +53,16 @@ export function createWorkboxServiceWorker(
         },
       });
     },
-    activateUpdate: () =>
-      state.updateSW === undefined
-        ? Promise.reject(new Error(text.notRegistered))
-        : state.updateSW(true),
+    activateUpdate: () => {
+      if (state.updateSW === undefined) {
+        return Promise.reject(new Error(text.notRegistered));
+      }
+      options.serviceWorkerContainer?.addEventListener(
+        CONTROLLER_CHANGE,
+        reload,
+        { once: true },
+      );
+      return state.updateSW();
+    },
   });
 }
