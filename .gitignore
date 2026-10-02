@@ -8,3 +8,4 @@ scripts/gpiod-capture
 captures/
 image/cache/
 image/out/
+dev-dist/
