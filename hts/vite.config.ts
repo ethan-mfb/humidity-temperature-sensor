@@ -29,7 +29,10 @@ export default defineConfig({
         scope: "/",
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,ico,webmanifest}"],
+        // The plugin precaches the manifest itself. Matching it here too adds a
+        // second entry with a different revision, which makes Workbox reject
+        // the whole precache.
+        globPatterns: ["**/*.{js,css,html,svg,png,ico}"],
         cleanupOutdatedCaches: true,
       },
       devOptions: { enabled: false },
