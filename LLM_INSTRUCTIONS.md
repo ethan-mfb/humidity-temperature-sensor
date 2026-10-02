@@ -40,6 +40,11 @@
 - `web-api/` - Web API service
   - `src/` - API source code
   - `scripts/` - Utility scripts (e.g., version generation)
+- `hts/` - PWA frontend (React, TypeScript, Sass), hosted on the pi
+  - `src/` - App source, by clean architecture layer
+  - `e2e/` - Playwright tests
+  - `deploy/` - nginx config and pi deploy scripts
+- `SCRUM_GUIDE.md` - The Scrum Guide, for the Sprints hts is built in
 
 ### Coding Standards
 

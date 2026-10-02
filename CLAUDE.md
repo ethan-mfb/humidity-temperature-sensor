@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Development Commands
 
-All commands should be run from the `/web-api` directory:
+There are two projects: `web-api/` (the sensor API) and `hts/` (the PWA frontend). Run each
+project's commands from its own directory.
+
+### web-api
 
 ```bash
 cd web-api
@@ -25,7 +28,28 @@ npm run fix-formatting  # Fix code formatting issues
 npm run package         # Build and create distributable package
 ```
 
-## Architecture Overview
+### hts
+
+```bash
+cd hts
+
+npm run dev              # Dev server (no service worker)
+npm run build            # Type check and production build with the service worker
+npm run test:once        # Unit tests once (preferred over npm run test:watch)
+npm run test:e2e         # Playwright tests against real builds (install, offline, update)
+npm run typecheck        # tsc over the app and the e2e tests
+npm run lint             # ESLint, including the clean architecture dependency rule
+npm run check-formatting # Check code formatting
+./deploy/deploy.sh       # Build and deploy to the pi
+```
+
+hts is a React/TypeScript/Sass PWA built with clean architecture (`src/domain`, `src/application`,
+`src/adapters`, `src/infrastructure`; dependencies point inward, lint enforces it), test first, with
+BEM class names. See `hts/README.md`, `hts/BEM.md` and `hts/BACKLOG.md` (Scrum artifacts and
+Definition of Done). The Scrum Guide is in `SCRUM_GUIDE.md`. hts needs Node 22.12+, unlike the
+web-api's Node 16.
+
+## Architecture Overview (web-api)
 
 This is a **Raspberry Pi IoT sensor application** for reading DHT22/AM2302 temperature and humidity sensors via GPIO pins.
 
