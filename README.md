@@ -147,10 +147,15 @@ checks, and is safe to re-run.
 1. clone the repository on the pi
 
    ```sh
+   sudo apt update
    sudo apt install -y git
-   git clone https://github.com/ethan-mfb/humidity-temperature-sensor.git
+   git clone --branch feature/init-sensor-service \
+     https://github.com/ethan-mfb/humidity-temperature-sensor.git
    cd humidity-temperature-sensor/scripts
    ```
+
+   > Drop the `--branch` once the capture tooling reaches `main`. Lite ships without git, and its
+   > package lists are stale on a fresh image, so the `apt update` is not optional.
 
 1. run `./setup-pi.sh`, which installs the toolchain and node, verifies GPIO access, builds the
    helper and captures one frame as a smoke test

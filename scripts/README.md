@@ -72,11 +72,17 @@ the helper build, and is safe to re-run. On a freshly flashed image:
 ```bash
 ssh alpha@rpi20w.local
 
+sudo apt update
 sudo apt install -y git
-git clone https://github.com/ethan-mfb/humidity-temperature-sensor.git
+git clone --branch feature/init-sensor-service \
+  https://github.com/ethan-mfb/humidity-temperature-sensor.git
 cd humidity-temperature-sensor/scripts
 ./setup-pi.sh
 ```
+
+Drop the `--branch` once the capture tooling reaches `main`. Lite ships without
+git, and its package lists are stale on a fresh image, so the `apt update` is
+not optional.
 
 Cloning beats `scp` here because the dev container has no bind mount to the
 host — `devcontainer.sh` runs with container-only storage, so the working tree
