@@ -153,7 +153,8 @@ References
 
 `scripts/` holds the DHT22 signal capture tool, used to get raw edge data off the hardware and
 replay it against the decoder. It ships separately from the api: it is deliberately excluded from
-`npm run package`, nothing in `web-api` depends on it, and it is not needed for the service to run.
+`npm run package` and is not needed for the service to run. The GPIO code it drives the sensor with
+lives in the [`dht22-capture`](./dht22-capture/) package, which the `web-api` also depends on.
 
 The clone from [Setting up the pi](#setting-up-the-pi) already has it, and `setup-pi.sh` built the
 helper, so capturing needs nothing else:
@@ -168,7 +169,7 @@ node capture-sensor.mjs --samples 30 --out baseline.jsonl
 > `gpio` group. If you do reach for `sudo`, it resets `PATH` to its `secure_path` and will not find
 > nvm's node, so it would have to be `sudo $(which node) …`.
 
-> After a `git pull` that touches `gpiod-capture.c`, re-run `./setup-pi.sh` to rebuild the helper.
+> After a `git pull` that touches `dht22-capture/`, re-run `./setup-pi.sh` to rebuild the helper.
 
 See [scripts/README.md](./scripts/README.md) for the output format, the end-of-run summary, copying
 the files across by hand, and why the timing-critical part is a C helper rather than a node binding.
@@ -451,7 +452,7 @@ Measured on this device, a Pi Zero 2 W running Raspberry Pi OS Lite (64-bit):
 
 > This whole section is sysfs-only arithmetic. On the gpiochip character device, line offsets **are**
 > BCM numbers — `--pin 2` means BCM 2 — so moving `gpioPinPollingService` to libgpiod deletes the
-> problem rather than fixing it. `scripts/gpiod-capture.c` already works this way. Two further
+> problem rather than fixing it. `dht22-capture/src/gpiod-capture.c` already works this way. Two further
 > consequences worth weighing when that migration is scheduled: it would drop the `onoff` dependency,
 > and onoff is the only reason this project is pinned to Node v16.
 

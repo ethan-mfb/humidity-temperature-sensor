@@ -6,7 +6,10 @@ included in `npm run package`.
 - `setup-pi.sh` — takes a freshly flashed image to a working capture setup.
 - `capture-sensor.mjs` — drives the sensor and records the raw edge stream.
 - `validate-capture.mjs` — decodes a capture and reports what the frames carry.
-- `gpiod-capture.c` — the timing-critical helper `capture-sensor.mjs` spawns.
+
+The GPIO work itself lives in the [`dht22-capture`](../dht22-capture/) package:
+the timing-critical C helper and the node wrapper that spawns it. It is a
+package because the `web-api` reads the sensor through the same code.
 
 ## `capture-sensor.mjs`
 
@@ -20,8 +23,8 @@ so you have something to replay against the decoder in
 ### Why there is a C helper
 
 `capture-sensor.mjs` owns sampling, output and analysis. The timing-critical
-part lives in `gpiod-capture.c`, which captures exactly one frame per
-invocation.
+part lives in `dht22-capture/src/gpiod-capture.c`, which captures exactly one
+frame per invocation.
 
 That split is not a preference, it is forced. A DHT22 frame has to be captured
 by a single process that never lets go of the line: the host drives the start
@@ -131,16 +134,15 @@ node capture-sensor.mjs --samples 30 --out baseline.jsonl
 shell you are in had already read it. `source ~/.bashrc`, or open a new ssh
 session.
 
-Copying the two files across by hand instead, from a machine that can reach the
-pi:
+Copying the files across by hand instead, from a machine that can reach the pi:
 
 ```bash
 # from the dev machine
-scp scripts/capture-sensor.mjs scripts/gpiod-capture.c alpha@rpi20w.local:~/sensor-capture/
+scp -r dht22-capture scripts alpha@rpi20w.local:~/sensor-capture/
 
 # on the Pi
-cd ~/sensor-capture
-gcc -O2 -Wall -Wextra -std=gnu17 -o gpiod-capture gpiod-capture.c $(pkg-config --cflags --libs libgpiod)
+cd ~/sensor-capture/dht22-capture && npm run build
+cd ../scripts && npm install
 node capture-sensor.mjs --samples 30 --out baseline.jsonl
 ```
 
@@ -279,12 +281,12 @@ the pi.
 
 ### What the columns mean
 
-| Column    | Meaning                                                            |
-| --------- | ------------------------------------------------------------------ |
-| `edges`   | Edges in the record, as captured.                                   |
-| `bits`    | Data bits recovered from them. A whole frame is 40.                 |
-| `pad`     | Leading bits missing, filled back in as zeros.                      |
-| `dropped` | Places where two consecutive edges report the same level.           |
+| Column    | Meaning                                                   |
+| --------- | --------------------------------------------------------- |
+| `edges`   | Edges in the record, as captured.                         |
+| `bits`    | Data bits recovered from them. A whole frame is 40.       |
+| `pad`     | Leading bits missing, filled back in as zeros.            |
+| `dropped` | Places where two consecutive edges report the same level. |
 
 ### The two defects it separates
 

@@ -1,0 +1,26 @@
+{
+  "name": "dht22-capture",
+  "version": "1.0.0",
+  "description": "DHT22/AM2302 frame capture over libgpiod, shared by the capture tooling and the web-api",
+  "type": "module",
+  "main": "src/index.mjs",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "mkdir -p bin && gcc -O2 -Wall -Wextra -std=gnu17 -o bin/gpiod-capture src/gpiod-capture.c $(pkg-config --cflags --libs libgpiod)",
+    "test:once": "node --test \"test/**/*.test.mjs\""
+  },
+  "author": "Ethan Lemke",
+  "license": "MIT",
+  "files": [
+    "README.md",
+    "package.json",
+    "src/**",
+    "bin/**"
+  ]
+}

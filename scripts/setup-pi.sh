@@ -13,14 +13,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The helper and its node wrapper live in the dht22-capture package, which both
+# this tooling and the web-api depend on.
+PACKAGE_DIR="$(cd "${SCRIPT_DIR}/../dht22-capture" && pwd)"
 HELPER_NAME="gpiod-capture"
+HELPER_PATH="${PACKAGE_DIR}/bin/${HELPER_NAME}"
 
 # onoff supports v16 only, and it is the web-api's GPIO library. The capture
 # script itself runs on anything modern; this is here so one pi serves both.
 NODE_VERSION=16
 NVM_VERSION="v0.40.3"
 
-# The header chip on a Pi Zero 2 W. gpiod-capture.c resolves by this label
+# The header chip on a Pi Zero 2 W. The helper resolves by this label
 # rather than by chip number, which is not stable across kernels.
 CHIP_LABEL="pinctrl-bcm2835"
 
@@ -97,15 +101,19 @@ if [ -e /sys/bus/iio/devices/iio:device0/in_humidityrelative_input ]; then
 fi
 
 say "Building the capture helper"
+cd "$PACKAGE_DIR"
+npm run build
+ok "built ${HELPER_PATH}"
+
+say "Linking the capture tooling to the package"
 cd "$SCRIPT_DIR"
-gcc -O2 -Wall -Wextra -std=gnu17 -o "$HELPER_NAME" "${HELPER_NAME}.c" \
-  $(pkg-config --cflags --libs libgpiod)
-ok "built ${SCRIPT_DIR}/${HELPER_NAME}"
+npm install
+ok "scripts/ can import dht22-capture"
 
 say "Smoke test: one frame on BCM ${DATA_PIN_BCM}"
 # Non-fatal. A sensor that is not wired yet still leaves a working setup; this
 # only reports what the hardware did.
-helper_output="$(./"$HELPER_NAME" --line "$DATA_PIN_BCM" 2>&1 || true)"
+helper_output="$("$HELPER_PATH" --line "$DATA_PIN_BCM" 2>&1 || true)"
 edges="$(printf '%s\n' "$helper_output" | grep -c '^[01] ' || true)"
 
 if [ "$edges" -ge 80 ]; then

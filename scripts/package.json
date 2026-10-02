@@ -1,0 +1,16 @@
+{
+  "name": "sensor-capture-scripts",
+  "version": "1.0.0",
+  "description": "DHT22/AM2302 signal capture and capture validation, run on the pi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "capture": "node capture-sensor.mjs",
+    "validate": "node validate-capture.mjs"
+  },
+  "dependencies": {
+    "dht22-capture": "file:../dht22-capture"
+  },
+  "author": "Ethan Lemke",
+  "license": "MIT"
+}

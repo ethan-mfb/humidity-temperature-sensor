@@ -1,7 +1,7 @@
 node_modules/
 dist/
 publish/
-scripts/gpiod-capture
+dht22-capture/bin/gpiod-capture
 *.jsonl
 # kept as the reference capture validate-capture.mjs is developed against
 !scripts/capture-1.jsonl

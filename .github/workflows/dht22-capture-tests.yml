@@ -1,0 +1,41 @@
+name: DHT22 Capture Package Tests
+
+on:
+  push:
+    paths:
+      - 'dht22-capture/**'
+      - '.github/workflows/dht22-capture-tests.yml'
+  pull_request:
+    paths:
+      - 'dht22-capture/**'
+      - '.github/workflows/dht22-capture-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # The helper is C against libgpiod v2. Building it here keeps a change
+      # that does not compile from reaching the pi, where it is built by hand.
+      - name: Install libgpiod
+        run: sudo apt-get update && sudo apt-get install -y libgpiod-dev pkg-config
+
+      - name: Build the capture helper
+        working-directory: dht22-capture
+        run: npm run build
+
+      - name: Run package tests
+        working-directory: dht22-capture
+        run: npm run test:once
