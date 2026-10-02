@@ -49,6 +49,16 @@ BEM class names. See `hts/README.md`, `hts/BEM.md` and `hts/BACKLOG.md` (Scrum a
 Definition of Done). The Scrum Guide is in `SCRUM_GUIDE.md`. hts needs Node 22.12+, unlike the
 web-api's Node 16.
 
+## Repository-Wide Standards
+
+Clean architecture, functional style and test-driven development apply to **every** project here.
+They are defined once in [LLM_INSTRUCTIONS.md](./LLM_INSTRUCTIONS.md): the four layers and the
+inward dependency rule (`### Architecture`), factory functions over classes (`### Functional
+style`), and red/green/refactor (`### Test-driven development`). Read those before adding code.
+
+`hts/` is organised by layer and enforces the dependency rule with ESLint. `web-api/` predates the
+standard and is organised by service folder; move it toward the layers as you touch it.
+
 ## Architecture Overview (web-api)
 
 This is a **Raspberry Pi IoT sensor application** for reading DHT22/AM2302 temperature and humidity sensors via GPIO pins.

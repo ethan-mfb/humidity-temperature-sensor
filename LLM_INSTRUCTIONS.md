@@ -46,6 +46,50 @@
   - `deploy/` - nginx config and pi deploy scripts
 - `SCRUM_GUIDE.md` - The Scrum Guide, for the Sprints hts is built in
 
+### Architecture
+
+Projects in this repo follow Uncle Bob's
+[clean architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html).
+The source is split into four layers, and **source dependencies only point inward**:
+
+```
+  infrastructure  ─┐
+  (browser, GPIO,   │   implements the ports
+   Workbox, nginx)  ▼
+  adapters ──────► application ──────► domain
+  (React, HTTP)     (use cases, ports)   (entities, pure rules)
+```
+
+| Layer                | Holds                                                | May import          |
+| -------------------- | ---------------------------------------------------- | ------------------- |
+| Domain               | Entities and rules, as pure functions                | nothing             |
+| Application          | Use cases, the ports they need, the store            | domain              |
+| Interface adapters   | UI components and hooks, HTTP controllers            | application, domain |
+| Frameworks & drivers | Port implementations over browser, hardware, network | application, domain |
+
+One module is the composition root — `hts/src/main.tsx`, `web-api/src/index.ts` — and is the only
+place that sees every layer. It builds the infrastructure, passes it to the application, and starts
+the app.
+
+Enforce the dependency rule in tooling wherever it can be: `hts/` does this with ESLint, so
+importing an outer layer from an inner one is a lint error. Run `npm run lint`.
+
+Data flows one way, per the Redux and Event Sourcing patterns above: infrastructure reports
+something through a port, a use case turns it into a domain event and dispatches it, the store
+reduces it into new immutable state, and the adapters read that state and render. User actions go
+back out through the use case, which calls the ports.
+
+`web-api/` predates this standard and is organised by service folder instead. Move it toward the
+layers as you touch it; do not rewrite it wholesale.
+
+### Functional style
+
+- No classes and no enums. Services are factory functions that close over their state.
+- State is immutable: values are `Readonly` and frozen, and updates return new values.
+- Use `type`, not `interface`, and explicit `import type`.
+- Only throw when the application cannot continue. Everything else returns an `Error` that retains
+  its `cause` and the call stack.
+
 ### Coding Standards
 
 - Define constants/variables; no "magic" string or numbers
@@ -100,6 +144,25 @@
 - Use SASS (.scss)
 - Use variables to define colors
 - Use rgba() not hexcodes for colors
+
+### Test-driven development
+
+Every change starts with a failing test.
+
+1. **Red:** write a test for the next small piece of behaviour, and run `npm run test:watch` to
+   watch it fail.
+1. **Green:** write the least code that passes it.
+1. **Refactor:** clean up with the tests green, then commit.
+
+Tests sit next to the code they cover (`greeting.ts` and `greeting.test.ts`). The layers make this
+cheap:
+
+- The domain is pure functions; test them directly.
+- The application gets fake ports. No browser, no hardware.
+- Infrastructure takes its globals as parameters (`registerSW`, the `EventTarget` to listen on,
+  `setInterval`, the GPIO handle), so tests pass fakes.
+- Components get Testing Library, queried by role and text, the way a user finds them.
+- End-to-end tests drive the real thing; see `hts/e2e/`.
 
 ### Testing
 

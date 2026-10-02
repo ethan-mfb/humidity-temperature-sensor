@@ -53,17 +53,8 @@ CI runs all of these on every push touching `hts/`: [hts-tests.yml](../.github/w
 
 ## Architecture
 
-hts follows Uncle Bob's
-[clean architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html).
-The source is split into four layers, and **source dependencies only point inward**:
-
-```
-  infrastructure  ─┐
-  (browser, Workbox) │   implements the ports
-                     ▼
-  adapters ──────► application ──────► domain
-  (React, Sass)     (use cases, ports)   (entities, pure rules)
-```
+hts follows the repo's [clean architecture, functional style and
+TDD](../LLM_INSTRUCTIONS.md#architecture). This is how the four layers land here:
 
 | Layer                | Directory             | Holds                                                                                    | May import          |
 | -------------------- | --------------------- | ---------------------------------------------------------------------------------------- | ------------------- |
@@ -72,16 +63,10 @@ The source is split into four layers, and **source dependencies only point inwar
 | Interface adapters   | `src/adapters/`       | React components and hooks, `bem()`                                                      | application, domain |
 | Frameworks & drivers | `src/infrastructure/` | Port implementations over browser and Workbox APIs                                       | application, domain |
 
-`src/main.tsx` is the composition root, the only module that sees every layer. It builds the
-infrastructure, passes it to the application, and renders.
-
-ESLint enforces the dependency rule: importing an outer layer from an inner one (or React from the
-domain or application) is a lint error. Run `npm run lint`.
+`src/main.tsx` is the composition root. ESLint enforces the dependency rule, and also bans React
+imports from the domain and application: run `npm run lint`.
 
 ### Data flow
-
-The app follows the Redux and event sourcing patterns from
-[LLM_INSTRUCTIONS.md](../LLM_INSTRUCTIONS.md):
 
 1. The browser or service worker reports something (a new version is waiting, the app is cached, an
    install is offered) through a port.
@@ -90,34 +75,14 @@ The app follows the Redux and event sourcing patterns from
 1. React reads the state with `useSyncExternalStore` and renders.
 1. User actions go back through `pwaService` (`applyUpdate`, `install`), which calls the ports.
 
-### Functional style
+Components follow the React rules in [LLM_INSTRUCTIONS.md](../LLM_INSTRUCTIONS.md): `function`
+declarations, props typed inline and never destructured, display text in a `text` object.
 
-- No classes or enums (lint enforces both). Services are factory functions that close over their
-  state; values are `Readonly` and frozen.
-- Use `type`, not `interface`, and explicit `import type`.
-- Only throw when the app cannot continue (a missing `#root`). Anything else returns an `Error` with
-  a `cause`; see `createAppError`.
-- Components follow the React rules in [LLM_INSTRUCTIONS.md](../LLM_INSTRUCTIONS.md): `function`
-  declarations, props typed inline and never destructured, display text in a `text` object.
+## Tests
 
-## Test-driven development
-
-Every change starts with a failing test.
-
-1. **Red:** write a test for the next small piece of behaviour, and run `npm run test:watch` to
-   watch it fail.
-1. **Green:** write the least code that passes it.
-1. **Refactor:** clean up with the tests green, then commit.
-
-Tests sit next to the code (`greeting.ts` and `greeting.test.ts`). The layers make this cheap:
-
-- The domain is pure functions; test them directly.
-- The application gets fake ports. No browser needed.
-- Infrastructure takes its globals as parameters (`registerSW`, the `EventTarget` to listen on,
-  `setInterval`, `reload`), so tests pass fakes.
-- Components get Testing Library, queried by role and text, the way a user finds them.
-- `e2e/` builds the app twice with different versions and drives real Chromium through install
-  criteria, offline loading and updating.
+Written test-first, per [LLM_INSTRUCTIONS.md](../LLM_INSTRUCTIONS.md#test-driven-development).
+Vitest and Testing Library cover the layers; `e2e/` builds the app twice with different versions and
+drives real Chromium through install criteria, offline loading and updating.
 
 ## Installing and updating
 
