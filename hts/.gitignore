@@ -1,3 +1,4 @@
 e2e/.builds/
 test-results/
 playwright-report/
+hts-*.tgz

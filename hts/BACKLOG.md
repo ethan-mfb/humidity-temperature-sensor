@@ -38,7 +38,7 @@ A Product Backlog item is Done, and part of the Increment, only when all of thes
 | 5   | Offer a new version when one is deployed, and switch only when accepted | Done   |
 | 6   | Install button, shown when the browser allows an install                | Done   |
 | 7   | e2e tests for install criteria, offline loading and updates             | Done   |
-| 8   | nginx config and deploy script for the pi                               | Done   |
+| 8   | nginx config and manual deploy steps for the pi                         | Done   |
 | 9   | CI running the Definition of Done checks on pushes touching `hts/`      | Done   |
 
 Found and fixed during the Sprint, by the e2e suite: the manifest was precached twice, which emptied

@@ -40,7 +40,6 @@ npm run test:e2e         # Playwright tests against real builds (install, offlin
 npm run typecheck        # tsc over the app and the e2e tests
 npm run lint             # ESLint, including the clean architecture dependency rule
 npm run check-formatting # Check code formatting
-./deploy/deploy.sh       # Build and deploy to the pi
 ```
 
 hts is a React/TypeScript/Sass PWA built with clean architecture (`src/domain`, `src/application`,
@@ -48,6 +47,10 @@ hts is a React/TypeScript/Sass PWA built with clean architecture (`src/domain`, 
 BEM class names. See `hts/README.md`, `hts/BEM.md` and `hts/BACKLOG.md` (Scrum artifacts and
 Definition of Done). The Scrum Guide is in `SCRUM_GUIDE.md`. hts needs Node 22.12+, unlike the
 web-api's Node 16.
+
+Deploying hts to the pi is manual on purpose: the developer copies a build with `scp` and runs the
+steps on the pi over ssh ("Publishing the hts PWA" in `README.md`). Do not add scripts that connect
+to the pi.
 
 ## Repository-Wide Standards
 

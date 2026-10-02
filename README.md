@@ -230,17 +230,12 @@ References
 `hts/` is the frontend, a PWA served by nginx on the pi at <https://rpi20w.local/>. It is built in
 the dev container; the pi only serves the built files, so it needs no node for this. Port 80 stays
 with the web-api, so nginx only listens on 443. [hts/README.md](./hts/README.md) covers the
-architecture and the scripts in more detail.
+architecture and the npm scripts.
+
+Every step that touches the pi is done by hand: copy files with `scp`, then `ssh alpha@rpi20w.local`
+and run the commands there. Nothing in the repo connects to the pi for you.
 
 #### One-time setup
-
-1. **Let the dev container ssh to the pi without a password.** `deploy.sh` runs ssh and scp several
-   times, and each one asks for the password otherwise.
-
-   ```sh
-   ssh-keygen -t ed25519        # skip if ~/.ssh/id_ed25519 already exists
-   ssh-copy-id alpha@rpi20w.local
-   ```
 
 1. **Make a certificate.** Service workers only run over https, and only with a certificate the
    browser trusts, so without one the app can neither install nor update. On a machine with
@@ -252,23 +247,32 @@ architecture and the scripts in more detail.
    ```
 
 1. **Trust mkcert's CA on every phone and laptop that will use the app.** `mkcert -CAROOT` prints
-   where `rootCA.pem` is. See [Hosting on the pi](./hts/README.md#one-time-setup) for Android and
-   iOS. Never copy `rootCA-key.pem` anywhere.
+   where `rootCA.pem` is. See [One-time setup](./hts/README.md#one-time-setup) in the hts README
+   for Android and iOS. Never copy `rootCA-key.pem` anywhere.
 
-1. **Put the certificate on the pi:**
+1. **Copy the certificate to the pi**, from the machine that made it:
 
    ```sh
    scp hts.crt hts.key alpha@rpi20w.local:
-   ssh alpha@rpi20w.local 'sudo mkdir -p /etc/ssl/hts \
-     && sudo mv hts.crt hts.key /etc/ssl/hts/ \
-     && sudo chmod 600 /etc/ssl/hts/hts.key'
    ```
 
-1. **Install nginx and the site on the pi**, from the clone made in
-   [Setting up the pi](#setting-up-the-pi):
+1. **ssh into the pi** and do the rest there:
 
    ```sh
    ssh alpha@rpi20w.local
+   ```
+
+1. **Move the certificate into place:**
+
+   ```sh
+   sudo mkdir -p /etc/ssl/hts
+   sudo mv ~/hts.crt ~/hts.key /etc/ssl/hts/
+   sudo chmod 600 /etc/ssl/hts/hts.key
+   ```
+
+1. **Install nginx and the site**, from the clone made in [Setting up the pi](#setting-up-the-pi):
+
+   ```sh
    cd ~/humidity-temperature-sensor
    git pull
    cd hts/deploy
@@ -276,7 +280,10 @@ architecture and the scripts in more detail.
    ```
 
    It installs nginx, enables the hts site, removes nginx's default site (which would take port
-   80 from the web-api), and creates `/var/www/hts` for releases. It is safe to re-run.
+   80 from the web-api), and creates `/var/www/hts/releases`, owned by `alpha`. It is safe to
+   re-run.
+
+1. `exit` the pi
 
 #### Building
 
@@ -291,13 +298,10 @@ npm run build           # type checks, then writes dist/
 npm run preview         # optional: try the build at http://localhost:4173
 ```
 
-`deploy.sh` builds again before it uploads, so this step is for checking a release before it goes
-out.
-
 #### Releasing
 
 Each release gets a new version. The version shows in the app's footer, which is how to tell what a
-phone or laptop is running.
+phone or laptop is running, and it names the release directory on the pi.
 
 1. start from an up to date, clean `main`: `git pull`, then `git status` should show nothing
 1. bump the version (`patch`, `minor` or `major`):
@@ -316,37 +320,78 @@ phone or laptop is running.
    git push origin main "hts-v$VERSION"
    ```
 
-> `deploy.sh` builds whatever is in the working tree. Deploy straight after pushing the release
-> commit, with nothing uncommitted, so the pi always runs a tagged commit.
+1. build it, as in [Building](#building), so `dist/` matches the release commit
+1. package the build:
+
+   ```sh
+   tar -czf "hts-$VERSION.tgz" -C dist .
+   ```
 
 #### Publishing
 
-From `hts/` in the dev container:
+1. **Copy the package to the pi**, from `hts/` in the dev container:
+
+   ```sh
+   scp "hts-$VERSION.tgz" alpha@rpi20w.local:
+   ```
+
+   If `rpi20w.local` does not resolve, use the pi's address instead, such as
+   `alpha@192.168.4.35:`.
+
+1. **ssh into the pi:**
+
+   ```sh
+   ssh alpha@rpi20w.local
+   ```
+
+1. **Unpack it as a new release.** Set `VERSION` to the version you just released:
+
+   ```sh
+   VERSION=0.1.1
+   RELEASE=/var/www/hts/releases/$VERSION
+   mkdir "$RELEASE"
+   tar -xzf ~/hts-$VERSION.tgz -C "$RELEASE"
+   rm ~/hts-$VERSION.tgz
+   ```
+
+   `mkdir` fails if that version is already on the pi. That is deliberate: bump the version
+   instead of overwriting a release that may be live.
+
+1. **Switch to it:**
+
+   ```sh
+   ln -sfn "$RELEASE" /var/www/hts/current.tmp
+   mv -T /var/www/hts/current.tmp /var/www/hts/current
+   ls -l /var/www/hts/current
+   ```
+
+   The `mv` replaces the `current` symlink in one step, so nginx never serves half of one release
+   and half of another. nginx picks it up straight away; it does not need a reload.
+
+1. **Clear out old releases**, keeping the last two or three to roll back to:
+
+   ```sh
+   ls /var/www/hts/releases
+   rm -rf /var/www/hts/releases/<old version>
+   ```
+
+1. `exit` the pi, open <https://rpi20w.local/> and check the footer shows the new version. Copies of
+   the app that are already installed or open show "A new version is available." within an hour,
+   or the next time they are launched. **Update** switches to it.
+
+#### Rolling back
+
+ssh into the pi and point `current` at an older release:
 
 ```sh
-./deploy/deploy.sh                       # alpha@rpi20w.local
-./deploy/deploy.sh alpha@192.168.4.35    # if rpi20w.local does not resolve
+ls /var/www/hts/releases
+ln -sfn /var/www/hts/releases/<version> /var/www/hts/current.tmp
+mv -T /var/www/hts/current.tmp /var/www/hts/current
 ```
 
-It builds, uploads the build to `/var/www/hts/releases/<timestamp>` and switches the
-`/var/www/hts/current` symlink to it in one step, so nginx never serves half of one version and half
-of another. The newest three releases are kept.
+Installed copies offer the older version as an update on their next check, the same as a new one.
 
-1. open <https://rpi20w.local/> and check the footer shows the new version
-1. copies of the app that are already installed or open show "A new version is available." within
-   an hour, or the next time they are launched. **Update** switches to it.
-
-Rolling back points `current` at an older release:
-
-```sh
-ssh alpha@rpi20w.local 'ls /var/www/hts/releases'
-ssh alpha@rpi20w.local 'ln -sfn /var/www/hts/releases/<timestamp> /var/www/hts/current'
-```
-
-Clients only see a version as new if it differs from what they cached, so they also pick up the
-rollback on their next check.
-
-Day to day
+Day to day, on the pi
 
 - `sudo systemctl status nginx` to check the server
 - `sudo tail -f /var/log/nginx/error.log` to follow its errors

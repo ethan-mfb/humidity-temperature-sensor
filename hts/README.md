@@ -99,72 +99,43 @@ drives real Chromium through install criteria, offline loading and updating.
 ## Hosting on the pi
 
 nginx on the pi serves the built files over https. Service workers only run in a secure context, so
-over plain http the app loads but can neither install nor update. `deploy/` has everything:
+over plain http the app loads but can neither install nor update. `deploy/` has the pi side:
 
 - `nginx-hts.conf`: the site, on port 443 only. It never lets an http cache hold `sw.js`,
   `index.html` or the manifest, and caches the hashed files in `/assets/` for a year.
-- `setup-pi-hosting.sh`: one-time setup on the pi.
-- `deploy.sh`: builds and deploys from the dev container.
+- `setup-pi-hosting.sh`: one-time setup, run on the pi after you ssh in.
 
 The app is at <https://rpi20w.local/>. Port 80 stays with the web-api's systemd service (see
 [Running the web-api as a service](../README.md#running-the-web-api-as-a-service)), so
 <http://rpi20w.local/> is still the API. Putting both behind nginx is in the backlog.
 
-> Sprint 1 tested the nginx config in the dev container but has not run it on the pi yet. That is
-> the top item in [BACKLOG.md](./BACKLOG.md).
+Deploying is done by hand: build and package in the dev container, `scp` the package to the pi,
+then ssh in, unpack it as a release and switch the `current` symlink to it. The steps are in
+[Publishing the hts PWA](../README.md#publishing-the-hts-pwa) in the root README.
+
+> Sprint 1 tested the nginx config and the release switch in the dev container but has not run them
+> on the pi yet. That is the top item in [BACKLOG.md](./BACKLOG.md).
 
 ### One-time setup
 
-1. **Make a certificate.** The browser has to trust the certificate, or it will not run the service
-   worker. [mkcert](https://github.com/FiloSottile/mkcert) makes a local certificate authority and
-   certificates it signs. On your workstation:
+The full list is in the [root README](../README.md#one-time-setup). The part that differs per device
+is trusting the certificate.
 
-   ```bash
-   mkcert -install
-   mkcert -cert-file hts.crt -key-file hts.key rpi20w.local
-   ```
+The browser has to trust the pi's certificate, or it will not run the service worker.
+[mkcert](https://github.com/FiloSottile/mkcert) makes a local certificate authority (CA) and a
+certificate for `rpi20w.local` signed by it. Every phone and laptop that uses the app has to trust
+that CA. `mkcert -CAROOT` prints where its `rootCA.pem` is:
 
-1. **Trust the CA on every device that will use the app.** `mkcert -CAROOT` prints where
-   `rootCA.pem` is. Install it as a trusted CA on each device: on most Android versions, under Settings → Security →
-   Encryption & credentials → Install a certificate → CA certificate. On iOS, install the profile,
-   then turn it on under Settings → General → About → Certificate Trust Settings. Never share
-   `rootCA-key.pem`.
+- **The machine that ran `mkcert -install`** already trusts it.
+- **Other computers:** import `rootCA.pem` into the system or browser certificate store as a trusted
+  root CA.
+- **Android:** copy `rootCA.pem` to the phone, then on most versions Settings → Security →
+  Encryption & credentials → Install a certificate → CA certificate.
+- **iOS:** send `rootCA.pem` to the phone and install the profile, then turn it on under Settings →
+  General → About → Certificate Trust Settings.
 
-1. **Copy the certificate to the pi:**
-
-   ```bash
-   scp hts.crt hts.key alpha@rpi20w.local:
-   ssh alpha@rpi20w.local 'sudo mkdir -p /etc/ssl/hts \
-     && sudo mv hts.crt hts.key /etc/ssl/hts/ \
-     && sudo chmod 600 /etc/ssl/hts/hts.key'
-   ```
-
-1. **Set up nginx on the pi**, from the repository clone there:
-
-   ```bash
-   cd humidity-temperature-sensor/hts/deploy
-   ./setup-pi-hosting.sh
-   ```
-
-### Deploying
-
-From `hts/` in the dev container:
-
-```bash
-./deploy/deploy.sh            # alpha@rpi20w.local
-./deploy/deploy.sh user@host  # anywhere else
-```
-
-It builds, uploads the build to `/var/www/hts/releases/<timestamp>`, and moves the
-`/var/www/hts/current` symlink onto it in one step. The three newest releases are kept. To roll
-back, point `current` at an older one:
-
-```bash
-ssh alpha@rpi20w.local 'ls /var/www/hts/releases'
-ssh alpha@rpi20w.local 'ln -sfn /var/www/hts/releases/<timestamp> /var/www/hts/current'
-```
-
-Open copies of the app see the new version on their next hourly check or launch.
+Never share `rootCA-key.pem`. Anyone with it can make certificates every one of those devices
+trusts.
 
 ## Project files
 
@@ -174,7 +145,7 @@ Open copies of the app see the new version on their next hourly check or launch.
 | `src/styles/`        | `_tokens.scss` (colours as `rgba()`, spacing, fonts) and `global.scss`                                         |
 | `public/favicon.svg` | The icon source. The PNG icons and `favicon.ico` are generated from it at build time (`pwa-assets.config.ts`). |
 | `e2e/`               | Playwright tests, with a static server that can switch builds or go down                                       |
-| `deploy/`            | nginx config and the pi scripts                                                                                |
+| `deploy/`            | nginx config and the pi setup script                                                                           |
 | `vite.config.ts`     | Build, PWA manifest, Workbox and Vitest config                                                                 |
 | `eslint.config.js`   | Lint rules, including the architecture and functional style rules                                              |
 | `BEM.md`             | The CSS naming reference                                                                                       |

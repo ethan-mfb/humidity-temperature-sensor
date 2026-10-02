@@ -2,8 +2,9 @@
 #
 # Pi-side, one-time setup for hosting the hts PWA with nginx.
 #
-# Installs nginx, the hts site and the directory deploy.sh releases into. The
-# TLS certificate is not made here; see "Hosting on the pi" in ../README.md.
+# Installs nginx, the hts site and the directory releases are unpacked into.
+# The TLS certificate is not made here, and deploying is done by hand; see
+# "Publishing the hts PWA" in the root README.
 #
 # Idempotent — safe to re-run. Run it on the pi, not in the dev container.
 #
@@ -18,7 +19,7 @@ SITE_NAME="hts"
 
 case "${1:-}" in
   "") ;;
-  -h|--help) sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
+  -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
   *) echo "Unknown option: $1" >&2; exit 2 ;;
 esac
 
@@ -46,6 +47,6 @@ if [[ -f "$CERT_DIR/hts.crt" && -f "$CERT_DIR/hts.key" ]]; then
   sudo systemctl reload nginx
 else
   warn "no certificate in $CERT_DIR. nginx will not start the site until"
-  warn "hts.crt and hts.key are there. See \"Hosting on the pi\" in hts/README.md,"
+  warn "hts.crt and hts.key are there. See \"Publishing the hts PWA\" in the root README,"
   warn "then re-run this script."
 fi
