@@ -8,6 +8,7 @@ Builds a Raspberry Pi OS Lite (64-bit) image with the packages in
 - `build-image.sh`: the build itself. Needs root and loop devices.
 - `packages.txt`: what gets installed, one package per line.
 - `Dockerfile`: the build environment `build.sh` uses.
+- `pi-status/`: the boot check that picks what nginx serves, and its installer.
 
 ## What the build does
 
@@ -19,8 +20,12 @@ Builds a Raspberry Pi OS Lite (64-bit) image with the packages in
 1. Mounts both partitions, chroots in and runs `apt-get install` on
    `packages.txt`.
 1. Removes nginx's default site, which would clash with the hts site on port 80.
-   nginx starts on boot with no sites until the hts site is added; see
-   "Publishing the hts PWA" in the root README.
+1. Installs `pi-status` from `pi-status/`: a boot service that runs before
+   nginx and enables either the hts site, if its certificate, release and
+   config all check out, or a status page on port 80 saying what is wrong.
+   So nginx always starts, and a freshly flashed pi shows what still needs
+   setting up at `http://rpi20w.local/`. See "When the pi shows a status page"
+   in the root README.
 1. Puts back everything that makes the first boot a first boot: an empty
    `machine-id`, no daemons started, and the image's original `resolv.conf`.
    It also writes `/etc/humidity-temp-sensor-image`, recording the base image
@@ -78,9 +83,9 @@ is kept for 14 days.
 
 ## What is not in the image
 
-The hts site, its certificate and its releases. nginx is in the image, but
-those are per pi and set up by hand after flashing; see "Publishing the hts
-PWA" in the root README.
+The hts site, its certificate and its releases. nginx and pi-status are in
+the image, but those are per pi and set up by hand after flashing; see
+"Publishing the hts PWA" in the root README.
 
 Node 16. The README installs it with nvm into `~alpha/.nvm`, and that user
 does not exist until Imager's customization creates it at first boot. Run

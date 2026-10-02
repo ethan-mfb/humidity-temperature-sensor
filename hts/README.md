@@ -106,6 +106,11 @@ over plain http the app loads but can neither install nor update. `deploy/` has 
 - `setup-pi-hosting.sh`: one-time setup, run on the pi after you ssh in. nginx itself comes with
   the [pi image](../image/README.md).
 
+If hts cannot be served (no certificate, an expired one, no release), the pi's `pi-status` boot
+check serves a status page at <http://rpi20w.local/> saying what is wrong, instead of nginx failing
+to start. See
+[When the pi shows a status page](../README.md#when-the-pi-shows-a-status-page).
+
 The app is at <https://rpi20w.local/>; <http://rpi20w.local/> redirects there. The web-api is on
 port 3000 (see [Running the web-api as a service](../README.md#running-the-web-api-as-a-service)).
 Putting both behind nginx is in the backlog.

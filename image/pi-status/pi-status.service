@@ -1,0 +1,13 @@
+# Chooses what nginx serves before it starts, so a missing or broken hts
+# certificate shows a status page instead of stopping nginx. See pi-status.sh.
+[Unit]
+Description=Check the hts site and choose what nginx serves
+After=local-fs.target
+Before=nginx.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pi-status
+
+[Install]
+WantedBy=multi-user.target

@@ -175,12 +175,16 @@ in_chroot apt-get clean
 rm -rf "$MNT"/var/lib/apt/lists/*
 
 # nginx enables a default site on port 80, which would clash with the hts
-# site's own default server there. With it gone, nginx starts on boot
-# listening on nothing until hts/deploy/setup-pi-hosting.sh adds the hts site.
+# site's own default server there.
 if [ -e "$MNT/etc/nginx/sites-enabled/default" ]; then
   rm -f "$MNT/etc/nginx/sites-enabled/default"
   ok "removed nginx's default site"
 fi
+
+# In its place, pi-status: at every boot, before nginx, it serves either hts
+# or a status page saying why hts cannot be served. See pi-status/pi-status.sh.
+"$SCRIPT_DIR/pi-status/install.sh" "$MNT"
+ok "installed pi-status"
 
 say "Restoring first-boot state"
 if [ -e "$WORK_DIR/machine-id.orig" ]; then

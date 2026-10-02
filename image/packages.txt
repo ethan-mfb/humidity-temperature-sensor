@@ -15,3 +15,7 @@ gpiod
 # Serves the hts PWA (hts/deploy/nginx-hts.conf). build-image.sh removes its
 # default site, which would clash with the hts site on port 80.
 nginx
+
+# pi-status checks the hts certificate with it. Lite ships it as a dependency
+# of ca-certificates; listed so the image does not rely on that.
+openssl

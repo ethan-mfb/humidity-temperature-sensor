@@ -41,6 +41,7 @@ A Product Backlog item is Done, and part of the Increment, only when all of thes
 | 8   | nginx config and manual deploy steps for the pi                         | Done   |
 | 9   | CI running the Definition of Done checks on pushes touching `hts/`      | Done   |
 | 10  | nginx in the pi image, without its default site                         | Done   |
+| 11  | Status page instead of a dead nginx when hts cannot be served           | Done   |
 
 Found and fixed during the Sprint, by the e2e suite: the manifest was precached twice, which emptied
 the precache, and a tab opened before the app was cached never reloaded onto an accepted update.

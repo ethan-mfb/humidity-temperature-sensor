@@ -286,9 +286,10 @@ and run the commands there. Nothing in the repo connects to the pi for you.
    ```
 
    nginx comes with the [pi image](./image/README.md), already without its default site, which
-   would clash with the hts site on port 80. The script adds the hts site, enables it once the
-   certificate from the previous step is in place, and creates `/var/www/hts/releases`, owned by
-   `alpha`. It is safe to re-run.
+   would clash with the hts site on port 80. The script adds the hts site, creates
+   `/var/www/hts/releases` owned by `alpha`, and runs [`pi-status`](#when-the-pi-shows-a-status-page)
+   to choose what nginx serves. Until the first release is deployed that is a status page saying
+   so, at <http://rpi20w.local/>. It is safe to re-run.
 
    > On a pi flashed before nginx was added to the image, the script stops and says so. Reflash, or
    > run `sudo apt-get install -y nginx && sudo rm -f /etc/nginx/sites-enabled/default` first.
@@ -376,7 +377,16 @@ phone or laptop is running, and it names the release directory on the pi.
    ```
 
    The `mv` replaces the `current` symlink in one step, so nginx never serves half of one release
-   and half of another. nginx picks it up straight away; it does not need a reload.
+   and half of another.
+
+1. **Check it can be served:**
+
+   ```sh
+   sudo pi-status
+   ```
+
+   It should print `pi-status: serving hts.` On the first deploy this is what switches nginx from
+   the status page to hts. After that it only re-checks, and the reload it does is harmless.
 
 1. **Clear out old releases**, keeping the last two or three to roll back to:
 
@@ -397,15 +407,34 @@ ssh into the pi and point `current` at an older release:
 ls /var/www/hts/releases
 ln -sfn /var/www/hts/releases/<version> /var/www/hts/current.tmp
 mv -T /var/www/hts/current.tmp /var/www/hts/current
+sudo pi-status
 ```
 
 Installed copies offer the older version as an update on their next check, the same as a new one.
+
+#### When the pi shows a status page
+
+If <https://rpi20w.local/> does not load, open <http://rpi20w.local/>. When hts cannot be served,
+that shows a status page listing what is wrong and how to fix it: a missing, expired or mismatched
+certificate, a missing site or release, or nginx rejecting the config (with its `nginx -t` output).
+It also lists any failed systemd units.
+
+The page comes from `pi-status`, which comes with the [pi image](./image/README.md) and runs at
+every boot, before nginx. It enables the hts site only if every check passes; otherwise it enables
+the status page on port 80 instead. Either way nginx starts, so a broken certificate never leaves
+the pi serving nothing.
+
+After fixing the problem, ssh into the pi and run `sudo pi-status`. It checks again and, if
+everything passes, reloads nginx onto hts. The status page is also written when hts is being
+served, at `/var/www/pi-status/index.html`, and lists warnings such as a certificate expiring
+within 30 days.
 
 Day to day, on the pi
 
 - `sudo systemctl status nginx` to check the server
 - `sudo tail -f /var/log/nginx/error.log` to follow its errors
 - `ls -l /var/www/hts/current` to see which release is live
+- `sudo pi-status` to re-check, and `journalctl -u pi-status -b` for what it decided at boot
 
 ### Connecting the sensor
 
