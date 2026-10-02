@@ -3,6 +3,10 @@
 Pi-side tooling. These scripts are not part of the `web-api` package and are not
 included in `npm run package`.
 
+- `setup-pi.sh` — takes a freshly flashed image to a working capture setup.
+- `capture-sensor.mjs` — drives the sensor and records the raw edge stream.
+- `gpiod-capture.c` — the timing-critical helper `capture-sensor.mjs` spawns.
+
 ## `capture-sensor.mjs`
 
 Drives the DHT22/AM2302 start signal and records every GPIO edge the sensor
@@ -62,6 +66,26 @@ you move the data line to a pin without one.
 
 ### One-time setup on the Pi
 
+`setup-pi.sh` does everything in this section, plus the access checks below and
+the helper build, and is safe to re-run. On a freshly flashed image:
+
+```bash
+ssh alpha@rpi20w.local
+
+sudo apt install -y git
+git clone https://github.com/ethan-mfb/humidity-temperature-sensor.git
+cd humidity-temperature-sensor/scripts
+./setup-pi.sh
+```
+
+Cloning beats `scp` here because the dev container has no bind mount to the
+host — `devcontainer.sh` runs with container-only storage, so the working tree
+exists only inside the container and the host has nothing to copy from. Pass
+`--skip-node` if you only want the capture tooling; node 16 is installed for the
+`web-api`, and `capture-sensor.mjs` itself runs on any current node.
+
+The manual equivalent, if you would rather not run the script:
+
 ```bash
 ssh alpha@rpi20w.local
 
@@ -84,6 +108,16 @@ gpioinfo | head
 ```
 
 ### Capture
+
+If you ran `setup-pi.sh` the helper is already built, so this is the whole step:
+
+```bash
+cd ~/humidity-temperature-sensor/scripts
+node capture-sensor.mjs --samples 30 --out baseline.jsonl
+```
+
+Copying the two files across by hand instead, from a machine that can reach the
+pi:
 
 ```bash
 # from the dev machine
@@ -112,8 +146,11 @@ since chip numbering is not stable across kernels and boards. Override with
 ```bash
 # from the dev machine
 mkdir -p captures
-scp alpha@rpi20w.local:~/sensor-capture/'*.jsonl' captures/
+scp alpha@rpi20w.local:~/humidity-temperature-sensor/scripts/'*.jsonl' captures/
 ```
+
+Adjust the remote path to `~/sensor-capture/` if you copied the scripts over by
+hand rather than cloning.
 
 ### Output format
 

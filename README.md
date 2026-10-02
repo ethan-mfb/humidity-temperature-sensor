@@ -140,8 +140,30 @@ replay it against the decoder. It ships separately from the api: it is deliberat
 `npm run package`, nothing in `web-api` depends on it, and it is not needed for the service to run.
 Publish it when you need to diagnose the sensor, not on every release.
 
-1. `ssh alpha@rpi20w.local``
-1. run `mkdir -p ~/sensor-capture`, then from the dev machine:
+`scripts/setup-pi.sh` covers this section, the apt and node steps above, and the GPIO access
+checks, and is safe to re-run.
+
+1. `ssh alpha@rpi20w.local`
+1. clone the repository on the pi
+
+   ```sh
+   sudo apt install -y git
+   git clone https://github.com/ethan-mfb/humidity-temperature-sensor.git
+   cd humidity-temperature-sensor/scripts
+   ```
+
+1. run `./setup-pi.sh`, which installs the toolchain and node, verifies GPIO access, builds the
+   helper and captures one frame as a smoke test
+1. run `node capture-sensor.mjs --samples 30 --out baseline.jsonl` to capture, with no `sudo`
+
+> Clone on the pi rather than `scp`-ing from the dev container. `devcontainer.sh` runs the
+> container with container-only storage and no bind mount, so the working tree exists only inside
+> the container — there is nothing on the host to copy from, and the container cannot resolve
+> `rpi20w.local` anyway.
+
+Copying the two files across by hand instead, from a machine that can reach the pi:
+
+1. run `mkdir -p ~/sensor-capture` on the pi, then from the dev machine:
 
    ```sh
    scp scripts/capture-sensor.mjs scripts/gpiod-capture.c alpha@rpi20w.local:~/sensor-capture/
@@ -154,8 +176,6 @@ Publish it when you need to diagnose the sensor, not on every release.
    gcc -O2 -Wall -Wextra -std=gnu17 -o gpiod-capture gpiod-capture.c \
      $(pkg-config --cflags --libs libgpiod)
    ```
-
-1. run `node capture-sensor.mjs --samples 30 --out baseline.jsonl` to capture, with no `sudo`
 
 > `-std=gnu17` pins the language standard instead of taking the compiler's default. It is a no-op
 > for trixie's gcc 14, which already defaults to gnu17, and it is there for the case where the helper
