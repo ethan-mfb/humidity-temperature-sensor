@@ -18,7 +18,7 @@ Builds a Raspberry Pi OS Lite (64-bit) image with the packages in
    the filesystem to fill the new space.
 1. Mounts both partitions, chroots in and runs `apt-get install` on
    `packages.txt`.
-1. Removes nginx's default site, which would take port 80 from the web-api.
+1. Removes nginx's default site, which would clash with the hts site on port 80.
    nginx starts on boot with no sites until the hts site is added; see
    "Publishing the hts PWA" in the root README.
 1. Puts back everything that makes the first boot a first boot: an empty

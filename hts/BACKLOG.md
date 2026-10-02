@@ -52,10 +52,10 @@ In order. Refine items before pulling them into a Sprint.
 1. **Run hosting on the real pi.** Build and flash the image (it now includes nginx), issue the
    certificate, run `setup-pi-hosting.sh`, deploy, and install the app on a phone and a laptop.
    Nothing in Sprint 1 has run on the pi yet.
-1. **Decide how hts and the web-api share the pi.** Today the web-api owns port 80 and hts is
-   on 443 only, so they are different origins. Either nginx takes 80 and 443 and proxies `/api`
-   to the web-api on a local port (one origin, https for both, no CORS), or the web-api allows
-   CORS from hts. Needed before the next item.
+1. **Decide how hts and the web-api share the pi.** nginx serves hts on 80 and 443 and the
+   web-api is on port 3000, so they are different origins. Either nginx proxies `/api` to the
+   web-api (one origin, https for both, no CORS), or the web-api allows CORS from hts. Needed
+   before the next item.
 1. **Show the current reading.** Fetch the latest humidity and temperature from the web-api and
    display them.
 1. **Handle the sensor being unreachable.** Show the last reading and its age when the API fails.

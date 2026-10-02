@@ -101,14 +101,14 @@ drives real Chromium through install criteria, offline loading and updating.
 nginx on the pi serves the built files over https. Service workers only run in a secure context, so
 over plain http the app loads but can neither install nor update. `deploy/` has the pi side:
 
-- `nginx-hts.conf`: the site, on port 443 only. It never lets an http cache hold `sw.js`,
+- `nginx-hts.conf`: the site. It redirects http to https, never lets an http cache hold `sw.js`,
   `index.html` or the manifest, and caches the hashed files in `/assets/` for a year.
 - `setup-pi-hosting.sh`: one-time setup, run on the pi after you ssh in. nginx itself comes with
   the [pi image](../image/README.md).
 
-The app is at <https://rpi20w.local/>. Port 80 stays with the web-api's systemd service (see
-[Running the web-api as a service](../README.md#running-the-web-api-as-a-service)), so
-<http://rpi20w.local/> is still the API. Putting both behind nginx is in the backlog.
+The app is at <https://rpi20w.local/>; <http://rpi20w.local/> redirects there. The web-api is on
+port 3000 (see [Running the web-api as a service](../README.md#running-the-web-api-as-a-service)).
+Putting both behind nginx is in the backlog.
 
 Deploying is done by hand: build and package in the dev container, `scp` the package to the pi,
 then ssh in, unpack it as a release and switch the `current` symlink to it. The steps are in

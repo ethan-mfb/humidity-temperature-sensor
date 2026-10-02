@@ -175,9 +175,10 @@ the files across by hand, and why the timing-critical part is a C helper rather 
 
 ### Running the web-api as a service
 
-The web-api serves HTTP on its own, so there is no apache or nginx in front of it. systemd keeps
-it running across reboots and restarts it if it crashes, and `CAP_NET_BIND_SERVICE` lets it bind
-port 80 without running as root.
+The web-api serves HTTP on its own, on port 3000, so there is no apache or nginx in front of it.
+Ports 80 and 443 belong to nginx, which serves the hts PWA (see
+[Publishing the hts PWA](#publishing-the-hts-pwa)). systemd keeps the web-api running across
+reboots and restarts it if it crashes.
 
 1. `ssh alpha@rpi20w.local`
 1. create `/etc/systemd/system/web-api.service`
@@ -195,8 +196,7 @@ port 80 without running as root.
    # absolute path, systemd does not load nvm; use the output of `which node`
    ExecStart=/home/alpha/.nvm/versions/node/v16.20.2/bin/node index.js
    Environment=NODE_ENV=production
-   Environment=PORT=80
-   AmbientCapabilities=CAP_NET_BIND_SERVICE
+   Environment=PORT=3000
    NoNewPrivileges=true
    Restart=always
    RestartSec=5
@@ -207,7 +207,12 @@ port 80 without running as root.
 
 1. run `sudo systemctl daemon-reload`
 1. run `sudo systemctl enable --now web-api`
-1. verify by navigating to <http://rpi20w.local/>
+1. verify by navigating to <http://rpi20w.local:3000/>
+
+> Moving an existing pi off port 80: an older version of this unit had `Environment=PORT=80` and
+> `AmbientCapabilities=CAP_NET_BIND_SERVICE`. Change the first to `PORT=3000`, delete the second,
+> then run `sudo systemctl daemon-reload` and `sudo systemctl restart web-api`. Do this before
+> enabling the hts site, or nginx cannot bind port 80 and will not start.
 
 Day to day
 
@@ -228,8 +233,8 @@ References
 ### Publishing the hts PWA
 
 `hts/` is the frontend, a PWA served by nginx on the pi at <https://rpi20w.local/>. It is built in
-the dev container; the pi only serves the built files, so it needs no node for this. Port 80 stays
-with the web-api, so nginx only listens on 443. [hts/README.md](./hts/README.md) covers the
+the dev container; the pi only serves the built files, so it needs no node for this. nginx also
+listens on port 80, only to redirect to https. The web-api is on port 3000. [hts/README.md](./hts/README.md) covers the
 architecture and the npm scripts.
 
 Every step that touches the pi is done by hand: copy files with `scp`, then `ssh alpha@rpi20w.local`
@@ -279,8 +284,8 @@ and run the commands there. Nothing in the repo connects to the pi for you.
    ./setup-pi-hosting.sh
    ```
 
-   nginx comes with the [pi image](./image/README.md), already without its default site (which
-   would take port 80 from the web-api). The script adds the hts site, enables it once the
+   nginx comes with the [pi image](./image/README.md), already without its default site, which
+   would clash with the hts site on port 80. The script adds the hts site, enables it once the
    certificate from the previous step is in place, and creates `/var/www/hts/releases`, owned by
    `alpha`. It is safe to re-run.
 

@@ -13,5 +13,5 @@ pkg-config
 gpiod
 
 # Serves the hts PWA (hts/deploy/nginx-hts.conf). build-image.sh removes its
-# default site, which would take port 80 from the web-api.
+# default site, which would clash with the hts site on port 80.
 nginx
