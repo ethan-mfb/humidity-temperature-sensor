@@ -3,6 +3,8 @@ dist/
 publish/
 scripts/gpiod-capture
 *.jsonl
+# kept as the reference capture validate-capture.mjs is developed against
+!scripts/capture-1.jsonl
 captures/
 image/cache/
 image/out/

@@ -55,12 +55,9 @@ References
 1. clone the repository
 
    ```sh
-   git clone --branch feature/init-sensor-service \
-     https://github.com/ethan-mfb/humidity-temperature-sensor.git
+   git clone https://github.com/ethan-mfb/humidity-temperature-sensor.git
    cd humidity-temperature-sensor/scripts
    ```
-
-   > Drop the `--branch` once the capture tooling reaches `main`.
 
 1. run `./setup-pi.sh`. It installs node 16 through nvm, checks GPIO access, builds the capture
    helper and captures one frame as a smoke test. It is safe to re-run.
