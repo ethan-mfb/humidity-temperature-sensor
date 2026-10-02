@@ -53,7 +53,8 @@ sudo apt full-upgrade -y
 
 say "Installing build tools and libgpiod"
 # build-essential and python3 are for the web-api's epoll native addon; the
-# libgpiod packages are for the capture helper. Lite ships none of them.
+# libgpiod packages are for the capture helper. Lite 2026-09-15 already ships
+# all but libgpiod-dev; listing them keeps this independent of the base image.
 sudo apt install -y build-essential python3 libgpiod-dev pkg-config gpiod
 
 if [ "$SKIP_NODE" -eq 0 ]; then

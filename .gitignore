@@ -4,3 +4,5 @@ publish/
 scripts/gpiod-capture
 *.jsonl
 captures/
+image/cache/
+image/out/

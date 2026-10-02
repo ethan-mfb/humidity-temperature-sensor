@@ -18,10 +18,19 @@ A raspberry pi 0 2 w humidity and temperature sensor
 
 ## pi setup
 
+### Building the image
+
+The pi runs a custom image: the latest Raspberry Pi OS Lite (64-bit) with git, the toolchain and
+libgpiod already installed. Build it on a machine with docker, or with the **Build Pi Image**
+workflow in GitHub Actions. See [image/README.md](./image/README.md) for both, and for the package
+list.
+
 ### Installing the OS
 
 1. download and install [imager](https://www.raspberrypi.com/software/)
-1. select the Raspberry Pi OS Lite (64-bit) image, found under `Raspberry Pi OS (other)`
+1. choose `Raspberry Pi Zero 2 W` as the device
+1. for the OS, scroll to `Use custom` and select the `.img.xz` from `image/out/`, or the one
+   downloaded from the workflow run
 1. click edit settings
    1. set hostname: `rpi20w`
    1. username: `alpha`
@@ -31,10 +40,44 @@ A raspberry pi 0 2 w humidity and temperature sensor
    1. enable the SSH service: `rpi20w.local`
       1. use password authentication
 
+> Imager normally decides how to apply these settings from its own OS list, which a `Use custom`
+> file is not in. If `ssh alpha@rpi20w.local` does not connect after the first boot, check whether
+> the settings were applied before you debug the network.
+
 References
 
 - <https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh>
 - <https://www.raspberrypi.com/documentation/computers/getting-started.html#raspberry-pi-imager>
+
+### Setting up the pi
+
+1. `ssh alpha@rpi20w.local`
+1. clone the repository
+
+   ```sh
+   git clone --branch feature/init-sensor-service \
+     https://github.com/ethan-mfb/humidity-temperature-sensor.git
+   cd humidity-temperature-sensor/scripts
+   ```
+
+   > Drop the `--branch` once the capture tooling reaches `main`.
+
+1. run `./setup-pi.sh`. It installs node 16 through nvm, checks GPIO access, builds the capture
+   helper and captures one frame as a smoke test. It is safe to re-run.
+1. open a new shell, run `which node` and note the path. The service unit below needs it.
+
+> Clone on the pi rather than `scp`-ing from the dev container. `devcontainer.sh` runs the
+> container with container-only storage and no bind mount, so the working tree exists only inside
+> the container — there is nothing on the host to copy from, and the container cannot resolve
+> `rpi20w.local` anyway.
+
+> Node 16, because onoff only supports v16. It is the one dependency not baked into the image:
+> nvm installs into the home directory of `alpha`, who does not exist until Imager's settings create
+> the user at first boot.
+
+> `setup-pi.sh` also runs `apt update` and `apt full-upgrade`, and its apt install finds every
+> package already present. onoff depends on epoll, a native addon that node-gyp builds on the pi
+> during `npm install`, which is why the image carries build-essential and python3.
 
 ### Verifying GPIO access
 
@@ -93,29 +136,6 @@ References
 - <https://www.kernel.org/doc/html/latest/admin-guide/gpio/sysfs.html>
 - <https://github.com/fivdi/onoff#allowing-access-to-gpio-without-root-privileges>
 
-### Installing Node.js
-
-1. `ssh alpha@rpi20w.local`
-1. run `sudo apt update` and `sudo apt upgrade`
-1. run `sudo apt install -y build-essential python3 libgpiod-dev pkg-config gpiod`
-1. run `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash`
-1. run the following from the install:
-
-   ```sh
-   export NVM_DIR="$HOME/.nvm"
-   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-   ```
-
-1. run `nvm install 16`
-1. run `which node` and note the path, the service unit below needs it
-
-> Using the LTS v16 here because onoff only supports v16.
-
-> Lite ships without a compiler toolchain, unlike the desktop image. onoff depends on epoll, a
-> native addon that node-gyp builds on the pi during `npm install`, so build-essential and python3
-> have to be in place first.
-
 ### Publishing the web-api
 
 1. `cd web-api`
@@ -130,76 +150,31 @@ References
 1. navigate to `http://rpi20w.local:3000/`, then stop it with `ctrl+c`
 
 > `npm install --omit=dev` compiles the epoll native addon on the pi, so it needs the build tools
-> from the node install step. Node 16 headers against a current gcc is the usual reason this step
-> fails.
+> from the image. Node 16 headers against a current gcc is the usual reason this step fails.
 
 ### Publishing the capture tooling
 
 `scripts/` holds the DHT22 signal capture tool, used to get raw edge data off the hardware and
 replay it against the decoder. It ships separately from the api: it is deliberately excluded from
 `npm run package`, nothing in `web-api` depends on it, and it is not needed for the service to run.
-Publish it when you need to diagnose the sensor, not on every release.
 
-`scripts/setup-pi.sh` covers this section, the apt and node steps above, and the GPIO access
-checks, and is safe to re-run.
+The clone from [Setting up the pi](#setting-up-the-pi) already has it, and `setup-pi.sh` built the
+helper, so capturing needs nothing else:
 
-1. `ssh alpha@rpi20w.local`
-1. clone the repository on the pi
-
-   ```sh
-   sudo apt update
-   sudo apt install -y git
-   git clone --branch feature/init-sensor-service \
-     https://github.com/ethan-mfb/humidity-temperature-sensor.git
-   cd humidity-temperature-sensor/scripts
-   ```
-
-   > Drop the `--branch` once the capture tooling reaches `main`. Lite ships without git, and its
-   > package lists are stale on a fresh image, so the `apt update` is not optional.
-
-1. run `./setup-pi.sh`, which installs the toolchain and node, verifies GPIO access, builds the
-   helper and captures one frame as a smoke test
-1. run `node capture-sensor.mjs --samples 30 --out baseline.jsonl` to capture, with no `sudo`
-
-> Clone on the pi rather than `scp`-ing from the dev container. `devcontainer.sh` runs the
-> container with container-only storage and no bind mount, so the working tree exists only inside
-> the container — there is nothing on the host to copy from, and the container cannot resolve
-> `rpi20w.local` anyway.
-
-Copying the two files across by hand instead, from a machine that can reach the pi:
-
-1. run `mkdir -p ~/sensor-capture` on the pi, then from the dev machine:
-
-   ```sh
-   scp scripts/capture-sensor.mjs scripts/gpiod-capture.c alpha@rpi20w.local:~/sensor-capture/
-   ```
-
-1. `cd ~/sensor-capture`
-1. build the capture helper
-
-   ```sh
-   gcc -O2 -Wall -Wextra -std=gnu17 -o gpiod-capture gpiod-capture.c \
-     $(pkg-config --cflags --libs libgpiod)
-   ```
-
-> `-std=gnu17` pins the language standard instead of taking the compiler's default. It is a no-op
-> for trixie's gcc 14, which already defaults to gnu17, and it is there for the case where the helper
-> gets built somewhere newer: gcc 15 defaults to C23, which remaps `strtoul` to `__isoc23_strtoul`
-> and raises the binary's glibc floor from 2.34 to 2.38. Trixie ships 2.41 so either clears it today,
-> but the floor moves silently as libc calls are added, and this keeps it still.
-
-> Build on the pi. The helper is ~400 lines against one library and compiles in about a second even
-> on a Zero 2 W, which removes any question of architecture or library version. If you do build it
-> in the dev container, check `uname -m` matches the pi first — `Dockerfile` is `FROM ubuntu:latest`,
-> so the container inherits the host's architecture, and an x86_64 host produces a binary the pi
-> cannot run. `-static` with `pkg-config --static` is the portable escape hatch if you need one.
+```sh
+cd ~/humidity-temperature-sensor/scripts
+git pull
+node capture-sensor.mjs --samples 30 --out baseline.jsonl
+```
 
 > No `sudo`, unlike the pigpio-based tool this replaced. `/dev/gpiochip*` is reachable through the
 > `gpio` group. If you do reach for `sudo`, it resets `PATH` to its `secure_path` and will not find
 > nvm's node, so it would have to be `sudo $(which node) …`.
 
-See [scripts/README.md](./scripts/README.md) for the output format, the end-of-run summary and why
-the timing-critical part is a C helper rather than a node binding.
+> After a `git pull` that touches `gpiod-capture.c`, re-run `./setup-pi.sh` to rebuild the helper.
+
+See [scripts/README.md](./scripts/README.md) for the output format, the end-of-run summary, copying
+the files across by hand, and why the timing-critical part is a C helper rather than a node binding.
 
 ### Running the web-api as a service
 

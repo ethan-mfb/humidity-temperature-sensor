@@ -82,7 +82,13 @@ cd humidity-temperature-sensor/scripts
 
 Drop the `--branch` once the capture tooling reaches `main`. Lite ships without
 git, and its package lists are stale on a fresh image, so the `apt update` is
-not optional.
+not optional. On the custom image from [image/](../image/README.md) git is
+already installed, so skip straight to the `git clone`.
+
+Lite already ships most of what `setup-pi.sh` installs: as of the 2026-09-15
+image, `libgpiod-dev` is the only apt package it adds. The custom image has all
+of them, so there the script's apt step changes nothing, and node 16 is the
+only thing it actually installs.
 
 Cloning beats `scp` here because the dev container has no bind mount to the
 host — `devcontainer.sh` runs with container-only storage, so the working tree
@@ -134,6 +140,22 @@ cd ~/sensor-capture
 gcc -O2 -Wall -Wextra -std=gnu17 -o gpiod-capture gpiod-capture.c $(pkg-config --cflags --libs libgpiod)
 node capture-sensor.mjs --samples 30 --out baseline.jsonl
 ```
+
+`-std=gnu17` pins the language standard instead of taking the compiler's
+default. It is a no-op for trixie's gcc 14, which already defaults to gnu17, and
+it is there for the case where the helper gets built somewhere newer: gcc 15
+defaults to C23, which remaps `strtoul` to `__isoc23_strtoul` and raises the
+binary's glibc floor from 2.34 to 2.38. Trixie ships 2.41 so either clears it
+today, but the floor moves silently as libc calls are added, and this keeps it
+still.
+
+Build on the pi. The helper is ~400 lines against one library and compiles in
+about a second even on a Zero 2 W, which removes any question of architecture or
+library version. If you do build it in the dev container, check `uname -m`
+matches the pi first — `Dockerfile` is `FROM ubuntu:latest`, so the container
+inherits the host's architecture, and an x86_64 host produces a binary the pi
+cannot run. `-static` with `pkg-config --static` is the portable escape hatch if
+you need one.
 
 **No `sudo`.** `/dev/gpiochip*` is reachable through the `gpio` group, unlike
 pigpio's `/dev/mem`. If you do use `sudo`, note that it resets `PATH` to its

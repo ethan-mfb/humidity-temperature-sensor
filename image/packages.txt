@@ -1,0 +1,13 @@
+# Packages installed into the custom image, one per line.
+# '#' starts a comment. Installed with apt-get install, recommends included.
+
+git
+
+# The apt step of scripts/setup-pi.sh. Of these, the 2026-09-15 Lite base only
+# lacks libgpiod-dev; the rest are listed so the image does not depend on the
+# base continuing to ship them.
+build-essential
+python3
+libgpiod-dev
+pkg-config
+gpiod

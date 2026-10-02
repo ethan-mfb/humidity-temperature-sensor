@@ -1,0 +1,30 @@
+name: Build Pi Image
+
+# Manual only: a build downloads ~540MB and takes several minutes, and the base
+# image changes on Raspberry Pi's schedule, not on pushes to this repo.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # arm64 runner, so the chroot runs natively instead of under qemu.
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image
+        working-directory: image
+        run: ./build.sh
+
+      - name: Upload image
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-image
+          path: |
+            image/out/*.img.xz
+            image/out/*.img.xz.sha256
+          # Already xz-compressed; zipping it again only costs time.
+          compression-level: 0
+          retention-days: 14
