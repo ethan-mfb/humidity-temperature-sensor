@@ -19,9 +19,10 @@ PACKAGE_DIR="$(cd "${SCRIPT_DIR}/../dht22-capture" && pwd)"
 HELPER_NAME="gpiod-capture"
 HELPER_PATH="${PACKAGE_DIR}/bin/${HELPER_NAME}"
 
-# onoff supports v16 only, and it is the web-api's GPIO library. The capture
-# script itself runs on anything modern; this is here so one pi serves both.
-NODE_VERSION=16
+# onoff pinned this to v16 while it was the web-api's GPIO library. The GPIO
+# work is a spawned C helper now, so both the capture tooling and the web-api
+# run on a current runtime.
+NODE_VERSION=20
 NVM_VERSION="v0.40.3"
 
 # The header chip on a Pi Zero 2 W. The helper resolves by this label
@@ -56,10 +57,10 @@ sudo apt update
 sudo apt full-upgrade -y
 
 say "Installing build tools and libgpiod"
-# build-essential and python3 are for the web-api's epoll native addon; the
-# libgpiod packages are for the capture helper. Lite 2026-09-15 already ships
-# all but libgpiod-dev; listing them keeps this independent of the base image.
-sudo apt install -y build-essential python3 libgpiod-dev pkg-config gpiod
+# build-essential and the libgpiod packages build the capture helper, which the
+# web-api also reads the sensor through. Lite 2026-09-15 already ships all but
+# libgpiod-dev; listing them keeps this independent of the base image.
+sudo apt install -y build-essential libgpiod-dev pkg-config gpiod
 
 if [ "$SKIP_NODE" -eq 0 ]; then
   say "Installing node ${NODE_VERSION} via nvm"

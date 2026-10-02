@@ -43,6 +43,12 @@ export const PULSE_WIDTHS_US = {
   FRAME_GAP_THRESHOLD: 1000,
 } as const;
 
+/**
+ * How often the sensor is read, in milliseconds. The AM2302 supports one
+ * reading every 2s; asking faster just returns the previous frame.
+ */
+export const MIN_READ_INTERVAL_MS = 2000;
+
 /** Operating ranges of the AM2302 sensor. */
 export const SENSOR_RANGES = {
   MIN_TEMPERATURE_C: -40,

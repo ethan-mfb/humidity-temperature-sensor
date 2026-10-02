@@ -1,78 +1,76 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Mock } from "vitest";
-import { STATUS_TYPES } from "../../gpioPinService/constants.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TEMP_SENSOR_STATUS } from "../../tempSensorController/constants.js";
-import type { GpioPinService } from "../../gpioPinService/types.js";
-import { createGpioPin } from "../../types/nominal-utils.js";
 import {
+  MIN_READ_INTERVAL_MS,
   TEMP_SENSOR_ERROR_TYPES,
   TEMP_SENSOR_MESSAGES,
-  targetDataGpioPin,
 } from "../constants.js";
 import { createTempSensorService } from "../index.js";
 import type {
-  GpioEdge,
+  FrameCapture,
+  SensorFrameSource,
   TempSensorError,
   TempSensorReading,
   TempSensorService,
 } from "../types.js";
-import { TEST_PIN, createFrameEdges, withChecksum } from "./utils.js";
+import { createFrameEdges, withChecksum } from "./utils.js";
 
 const roomConditionsBytes = withChecksum([0x02, 0x8c, 0x00, 0xea]);
 
-type GpioPinServiceStub = GpioPinService & {
-  emitData: (edge: GpioEdge) => void;
-  emitError: (reason: string) => void;
-  emitStatus: (status: { status: string; pin?: number }) => void;
-  startPolling: Mock;
-  stopPolling: Mock;
+const corruptChecksum = (bytes: readonly number[]): readonly number[] => [
+  ...bytes.slice(0, 4),
+  (bytes[4] + 1) & 0xff,
+];
+
+type SensorFrameSourceFake = SensorFrameSource & {
+  /** The next read answers with a frame carrying these bytes. */
+  queueFrame: (bytes: readonly number[]) => void;
+  /** The next read answers with a failed capture. */
+  queueError: (message: string) => void;
+  /** The next read rejects outright, as a helper that cannot be run would. */
+  queueThrow: (error: Error) => void;
 };
 
-function createGpioPinServiceStub(): GpioPinServiceStub {
-  const dataCallbacks: ((edge: GpioEdge) => void)[] = [];
-  const errorCallbacks: ((reason: string) => void)[] = [];
-  const statusCallbacks: ((status: {
-    status: string;
-    pin?: number;
-  }) => void)[] = [];
+/**
+ * Stands in for the hardware. The service is the application layer, so it is
+ * tested against a fake port rather than a pi.
+ */
+function createFrameSourceFake(): SensorFrameSourceFake {
+  const queued: (FrameCapture | Error)[] = [];
+
+  const readFrame = vi.fn(async (): Promise<FrameCapture> => {
+    const next = queued.shift();
+
+    if (next instanceof Error) throw next;
+
+    // An unqueued read is a quiet sensor, not a test failure: the service
+    // keeps polling and the next queued frame answers.
+    return next ?? { edges: [], error: "no frame" };
+  });
 
   return {
-    startPolling: vi.fn(async () => undefined),
-    stopPolling: vi.fn(async () => undefined),
-    onData: (callback) => {
-      dataCallbacks.push(callback);
-    },
-    onError: (callback) => {
-      errorCallbacks.push(callback);
-    },
-    onStatus: (callback) => {
-      statusCallbacks.push(callback);
-    },
-    emitData: (edge) => dataCallbacks.forEach((callback) => callback(edge)),
-    emitError: (reason) =>
-      errorCallbacks.forEach((callback) => callback(reason)),
-    emitStatus: (status) =>
-      statusCallbacks.forEach((callback) => callback(status)),
+    readFrame,
+    close: vi.fn(async () => undefined),
+    queueFrame: (bytes) =>
+      queued.push({ edges: createFrameEdges(bytes), error: null }),
+    queueError: (message) => queued.push({ edges: [], error: message }),
+    queueThrow: (error) => queued.push(error),
   };
 }
 
-function transmitFrame(
-  gpioPinService: GpioPinServiceStub,
-  bytes: readonly number[],
-  startTimestamp = 0,
-): void {
-  createFrameEdges(bytes, startTimestamp).forEach((edge) =>
-    gpioPinService.emitData(edge),
-  );
-}
-
 describe("createTempSensorService", () => {
-  let gpioPinService: GpioPinServiceStub;
+  let frameSource: SensorFrameSourceFake;
   let service: TempSensorService;
 
   beforeEach(() => {
-    gpioPinService = createGpioPinServiceStub();
-    service = createTempSensorService({ gpioPinService });
+    // Reads schedule themselves, so time is held still and advanced on demand.
+    vi.useFakeTimers();
+    frameSource = createFrameSourceFake();
+    service = createTempSensorService({ frameSource });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("lifecycle", () => {
@@ -81,24 +79,34 @@ describe("createTempSensorService", () => {
       expect(service.lastError).toBeUndefined();
     });
 
-    it("polls the default data pin on start", async () => {
+    it("reads once immediately on start, rather than waiting an interval", async () => {
+      frameSource.queueFrame(roomConditionsBytes);
+
       await service.start();
 
-      expect(gpioPinService.startPolling).toHaveBeenCalledWith(
-        targetDataGpioPin,
-      );
+      expect(frameSource.readFrame).toHaveBeenCalledTimes(1);
       expect(service.status).toBe(TEMP_SENSOR_STATUS.RUNNING);
     });
 
-    it("polls an injected pin when one is supplied", async () => {
-      const configured = createTempSensorService({
-        gpioPinService,
-        pin: createGpioPin(17),
-      });
+    it("keeps reading on the sensor's interval", async () => {
+      await service.start();
 
+      await vi.advanceTimersByTimeAsync(MIN_READ_INTERVAL_MS * 3);
+
+      expect(frameSource.readFrame).toHaveBeenCalledTimes(4);
+    });
+
+    it("honours an injected read interval", async () => {
+      const configured = createTempSensorService({
+        frameSource,
+        readIntervalMs: 100,
+      });
       await configured.start();
 
-      expect(gpioPinService.startPolling).toHaveBeenCalledWith(17);
+      await vi.advanceTimersByTimeAsync(250);
+
+      expect(frameSource.readFrame).toHaveBeenCalledTimes(3);
+      await configured.stop();
     });
 
     it("rejects with the message the controller maps to 409 when running", async () => {
@@ -115,33 +123,23 @@ describe("createTempSensorService", () => {
       );
     });
 
-    it("stops polling and reports stopped", async () => {
+    it("closes the frame source and reports stopped", async () => {
       await service.start();
 
       await service.stop();
 
-      expect(gpioPinService.stopPolling).toHaveBeenCalled();
+      expect(frameSource.close).toHaveBeenCalled();
       expect(service.status).toBe(TEMP_SENSOR_STATUS.STOPPED);
     });
 
-    it("propagates a failure to start", async () => {
-      gpioPinService.startPolling.mockRejectedValueOnce(
-        new Error("Command timeout: start"),
-      );
-
-      await expect(service.start()).rejects.toThrow("Command timeout: start");
-      expect(service.status).toBe(TEMP_SENSOR_STATUS.STOPPED);
-    });
-
-    it("reports stopped when the polling child exits on its own", async () => {
+    it("stops reading once stopped", async () => {
       await service.start();
+      await service.stop();
+      const readsBefore = frameSource.readFrame.mock.calls.length;
 
-      gpioPinService.emitStatus({
-        status: STATUS_TYPES.EXITED,
-        pin: TEST_PIN,
-      });
+      await vi.advanceTimersByTimeAsync(MIN_READ_INTERVAL_MS * 5);
 
-      expect(service.status).toBe(TEMP_SENSOR_STATUS.STOPPED);
+      expect(frameSource.readFrame).toHaveBeenCalledTimes(readsBefore);
     });
   });
 
@@ -153,10 +151,10 @@ describe("createTempSensorService", () => {
       });
     });
 
-    it("decodes a transmitted frame into a reading", async () => {
-      await service.start();
+    it("decodes a captured frame into a reading", async () => {
+      frameSource.queueFrame(roomConditionsBytes);
 
-      transmitFrame(gpioPinService, roomConditionsBytes);
+      await service.start();
 
       await expect(service.getLatestReading()).resolves.toMatchObject({
         temperatureC: 23.4,
@@ -165,66 +163,64 @@ describe("createTempSensorService", () => {
       });
     });
 
-    it("ignores edges that arrive while stopped", async () => {
-      transmitFrame(gpioPinService, roomConditionsBytes);
-
-      await expect(service.getLatestReading()).resolves.toMatchObject({
-        type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
-      });
-    });
-
-    it("clears readings from a previous run on restart", async () => {
+    it("does not serve a previous run's reading after a restart", async () => {
+      frameSource.queueFrame(roomConditionsBytes);
       await service.start();
-      transmitFrame(gpioPinService, roomConditionsBytes);
       await service.stop();
 
+      // Nothing queued, so the restart's first read finds a quiet sensor.
       await service.start();
 
       await expect(service.getLatestReading()).resolves.toMatchObject({
         type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
-        message: TEMP_SENSOR_MESSAGES.NO_READING_AVAILABLE,
       });
     });
   });
 
   describe("error handling", () => {
     it("surfaces a checksum failure without stopping", async () => {
-      const corrupted = [...roomConditionsBytes];
-      corrupted[4] = (corrupted[4] + 1) & 0xff;
-      await service.start();
+      frameSource.queueFrame(corruptChecksum(roomConditionsBytes));
 
-      transmitFrame(gpioPinService, corrupted);
+      await service.start();
 
       expect(service.status).toBe(TEMP_SENSOR_STATUS.RUNNING);
       expect(service.lastError).toMatchObject({
         type: TEMP_SENSOR_ERROR_TYPES.CHECKSUM,
       });
-      await expect(service.getLatestReading()).resolves.toMatchObject({
-        type: TEMP_SENSOR_ERROR_TYPES.CHECKSUM,
-      });
     });
 
     it("recovers on the next good frame", async () => {
-      const corrupted = [...roomConditionsBytes];
-      corrupted[4] = (corrupted[4] + 1) & 0xff;
+      frameSource.queueFrame(corruptChecksum(roomConditionsBytes));
+      frameSource.queueFrame(roomConditionsBytes);
       await service.start();
-      transmitFrame(gpioPinService, corrupted);
 
-      transmitFrame(gpioPinService, roomConditionsBytes, 100_000);
+      await vi.advanceTimersByTimeAsync(MIN_READ_INTERVAL_MS);
 
       await expect(service.getLatestReading()).resolves.toMatchObject({
         temperatureC: 23.4,
       });
     });
 
-    it("reports a GPIO error as a signal error", async () => {
-      await service.start();
+    it("reports a failed capture as a signal error", async () => {
+      frameSource.queueError("EACCES: permission denied");
 
-      gpioPinService.emitError("EACCES: permission denied");
+      await service.start();
 
       expect(service.lastError).toEqual({
         type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
         message: "EACCES: permission denied",
+      });
+    });
+
+    it("keeps polling when a read rejects outright", async () => {
+      frameSource.queueThrow(new Error("helper exited with signal SIGKILL"));
+
+      await service.start();
+
+      expect(service.status).toBe(TEMP_SENSOR_STATUS.RUNNING);
+      expect(service.lastError).toMatchObject({
+        type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
+        message: expect.stringContaining("SIGKILL"),
       });
     });
   });
@@ -233,9 +229,9 @@ describe("createTempSensorService", () => {
     it("delivers readings to subscribers", async () => {
       const received: (TempSensorReading | TempSensorError)[] = [];
       service.subscribe((event) => received.push(event));
-      await service.start();
+      frameSource.queueFrame(roomConditionsBytes);
 
-      transmitFrame(gpioPinService, roomConditionsBytes);
+      await service.start();
 
       expect(received).toHaveLength(1);
       expect(received[0]).toMatchObject({ temperatureC: 23.4 });
@@ -244,9 +240,9 @@ describe("createTempSensorService", () => {
     it("delivers recoverable errors to subscribers", async () => {
       const received: (TempSensorReading | TempSensorError)[] = [];
       service.subscribe((event) => received.push(event));
-      await service.start();
+      frameSource.queueError("signal noise");
 
-      gpioPinService.emitError("signal noise");
+      await service.start();
 
       expect(received).toEqual([
         {
@@ -259,23 +255,26 @@ describe("createTempSensorService", () => {
     it("stops delivering after unsubscribe", async () => {
       const callback = vi.fn();
       const unsubscribe = service.subscribe(callback);
+      frameSource.queueFrame(roomConditionsBytes);
       await service.start();
+      callback.mockClear();
 
       unsubscribe();
-      transmitFrame(gpioPinService, roomConditionsBytes);
+      frameSource.queueFrame(roomConditionsBytes);
+      await vi.advanceTimersByTimeAsync(MIN_READ_INTERVAL_MS);
 
       expect(callback).not.toHaveBeenCalled();
     });
 
-    it("keeps delivering to the other subscribers when one throws", async () => {
+    it("keeps serving other subscribers when one throws", async () => {
       const healthy = vi.fn();
       service.subscribe(() => {
-        throw new Error("subscriber exploded");
+        throw new Error("subscriber blew up");
       });
       service.subscribe(healthy);
-      await service.start();
+      frameSource.queueFrame(roomConditionsBytes);
 
-      transmitFrame(gpioPinService, roomConditionsBytes);
+      await service.start();
 
       expect(healthy).toHaveBeenCalledTimes(1);
     });

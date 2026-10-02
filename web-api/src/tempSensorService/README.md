@@ -2,12 +2,26 @@
 
 ## Overview
 
-A high-level service that leverages the GPIO Pin Service to interact with the AM2302 (DHT22) temperature and humidity sensor on the Raspberry Pi Zero 2. It transforms raw GPIO events into meaningful temperature and humidity readings and exposes a typed, event-driven API.
+A high-level service that reads the AM2302 (DHT22) temperature and humidity sensor on the Raspberry Pi Zero 2. It turns raw GPIO edges into meaningful readings and exposes a typed, event-driven API.
 
-## Relationship to GPIO Pin Service
+## Relationship to the frame source
 
-- Uses the GPIO Pin Service public API for low-level pin access and event subscription (no direct hardware access here).
-- Loosely coupled via dependency injection (builder pattern) and typed events.
+The service reaches the hardware through the `SensorFrameSource` port, declared
+in `types.ts` by this service rather than by any implementation of it. The
+AM2302 is request/response -- one start signal, one frame -- so the port is a
+single triggered read:
+
+```ts
+readFrame(): Promise<FrameCapture>;
+close(): Promise<void>;
+```
+
+The service owns _when_ to read and what the edges mean. The source owns how the
+pin is reached. `src/sensorFrameSource/libgpiod.ts` implements it over the
+[`dht22-capture`](../../../dht22-capture/) package; swapping to another
+mechanism is a new module and a line in `src/index.ts`, the composition root.
+
+Tests inject a fake source, so the whole service runs with no hardware.
 
 ## Responsibilities
 
@@ -29,15 +43,15 @@ A high-level service that leverages the GPIO Pin Service to interact with the AM
 
 ## Module Layout
 
-| File                  | Contents                                                               |
-| --------------------- | ---------------------------------------------------------------------- |
-| `index.ts`            | `createTempSensorService` factory, lifecycle and subscription handling |
-| `decoder.ts`          | Pure pipeline: pulses -> bits -> bytes -> checksum -> reading          |
-| `pulseAccumulator.ts` | Groups the GPIO edge stream into frames                                |
-| `reducer.ts`          | Pure reducer over the pipeline events                                  |
-| `constants.ts`        | Target pin, frame layout, pulse widths, sensor ranges, conversions     |
-| `types.ts`            | Service, pipeline and state types                                      |
-| `types.guards.ts`     | `isTempSensorError` runtime guard                                      |
+| File              | Contents                                                               |
+| ----------------- | ---------------------------------------------------------------------- |
+| `index.ts`        | `createTempSensorService` factory, lifecycle and subscription handling |
+| `decoder.ts`      | Pure pipeline: pulses -> bits -> bytes -> checksum -> reading          |
+| `edges.ts`        | Turns one read's edges into the pulses that produced them              |
+| `reducer.ts`      | Pure reducer over the pipeline events                                  |
+| `constants.ts`    | Target pin, frame layout, pulse widths, sensor ranges, conversions     |
+| `types.ts`        | Service, pipeline and state types                                      |
+| `types.guards.ts` | `isTempSensorError` runtime guard                                      |
 
 ## TypeScript API
 
@@ -77,7 +91,7 @@ export type TempSensorService = {
 };
 
 export function createTempSensorService(dependencies: {
-  gpioPinService: GpioPinService;
+  frameSource: SensorFrameSource;
   pin?: GpioPin; // defaults to targetDataGpioPin
   loggingService?: LoggingService;
 }): TempSensorService;
@@ -93,7 +107,7 @@ Notes:
 
 Provide a function builder that accepts dependencies and configuration:
 
-- GPIO Pin Service instance (or factory) used to `startPolling(pin)`, `stopPolling()`, and to subscribe to `onData`, `onError`, and `onStatus`.
+- A `SensorFrameSource` to read frames through. Which pin it reads is the source's business, not the service's.
 - Configuration including the target GPIO pin (defaults to `targetDataGpioPin`) and decoding thresholds.
 
 Example configuration constants live in `src/tempSensorService/constants.ts`.
@@ -113,8 +127,9 @@ Example configuration constants live in `src/tempSensorService/constants.ts`.
 
 ## Integration
 
-- On `start()`, call GPIO Pin Service `startPolling(pin)` (pin from config/default constant). Subscribe to GPIO `DATA` events and accumulate/interpret pulses. Maintain `status` as `TEMP_SENSOR_STATUS.RUNNING`.
-- On `stop()`, unsubscribe/cleanup and call GPIO Pin Service `stopPolling()`. Set `status` to `TEMP_SENSOR_STATUS.STOPPED`.
+- On `start()`, read one frame straight away so the first reading does not wait out an interval, then schedule the next. Maintain `status` as `TEMP_SENSOR_STATUS.RUNNING`.
+- Reads schedule themselves rather than running on an interval: a read that runs long must not overlap the next, because the sensor answers a single start signal.
+- On `stop()`, cancel the pending read, set `status` to `TEMP_SENSOR_STATUS.STOPPED` and `close()` the source.
 - `getLatestReading()` resolves with whichever of a reading or an error the most recent frame produced, and with a `signal` error carrying `No reading available yet` before the first frame. It never throws for checksum errors.
 - `lastError` is retained after a later success so the status endpoint can still report it; the most recent outcome is tracked separately.
 - Starting clears any history, since readings from a previous run say nothing about the current one.
@@ -125,7 +140,7 @@ Example configuration constants live in `src/tempSensorService/constants.ts`.
 
 - Unit-test pure reducers for: pulse->bit, bit->frame, checksum verification, and range validation.
 - Unit-test the service state machine: lifecycle transitions, error propagation, `getLatestReading()` behavior after errors, and subscription/unsubscription.
-- Integration-test with a mocked GPIO Pin Service stream (simulate pulses, errors, and status changes).
+- Integration-test against a fake `SensorFrameSource` (queue frames, failed captures and outright rejections).
 - Use `npm run test:once` to avoid watch mode in CI; run `npm run typecheck` and `npm run lint` to enforce typing and style.
 
 ## Future Extensions
@@ -136,7 +151,8 @@ Example configuration constants live in `src/tempSensorService/constants.ts`.
 
 ## References
 
-- GPIO Pin Service: `src/gpioPinService/`
+- Frame source implementations: `src/sensorFrameSource/`
+- Capture package: `dht22-capture/`
 - Temp Sensor Controller (REST/SSE and types): `src/tempSensorController/`
 - Nominal types: `src/types/nominal-types.ts`
 - Constants: `src/tempSensorService/constants.ts`

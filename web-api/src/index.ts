@@ -2,9 +2,11 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import { openApiSpec } from "./apiSpec.js";
 import { indexRequestHandler, indexRequestPath } from "./indexController.js";
-import { createGpioPinService } from "./gpioPinService/index.js";
+import { createLibgpiodFrameSource } from "./sensorFrameSource/libgpiod.js";
 import { createLoggingService } from "./loggingService/index.js";
 import { createTempSensorService } from "./tempSensorService/index.js";
+import { targetDataGpioPin } from "./tempSensorService/constants.js";
+import { createGpioPin } from "./types/nominal-utils.js";
 import {
   createTempSensorRestService,
   createTempSensorSSEService,
@@ -14,9 +16,15 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 const loggingService = createLoggingService();
-const gpioPinService = createGpioPinService();
+
+// The composition root is the only place that names an implementation of the
+// frame source. Reaching the hardware another way is a new module and this line.
+const frameSource = createLibgpiodFrameSource({
+  pin: createGpioPin(targetDataGpioPin),
+});
+
 const tempSensorService = createTempSensorService({
-  gpioPinService,
+  frameSource,
   loggingService,
 });
 const tempSensorRestService = createTempSensorRestService(tempSensorService);

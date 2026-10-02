@@ -29,9 +29,9 @@ describe("dirname utilities", () => {
   });
 
   it("should resolve path from module", () => {
-    const resolved = resolveFromModule(import.meta.url, "./gpioPinService");
+    const resolved = resolveFromModule(import.meta.url, "./tempSensorService");
     expect(resolved).toBeTruthy();
     expect(typeof resolved).toBe("string");
-    expect(resolved).toContain("gpioPinService");
+    expect(resolved).toContain("tempSensorService");
   });
 });

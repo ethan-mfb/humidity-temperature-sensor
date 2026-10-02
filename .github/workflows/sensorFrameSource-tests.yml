@@ -1,20 +1,20 @@
-name: GPIO Pin Service Tests
+name: Sensor Frame Source Tests
 
 on:
   push:
     paths:
-      - 'web-api/src/gpioPinService/**'
+      - 'web-api/src/sensorFrameSource/**'
       - 'web-api/package*.json'
       - 'web-api/tsconfig*.json'
       - 'web-api/vitest.config.ts'
-      - '.github/workflows/gpioPinService-tests.yml'
+      - '.github/workflows/sensorFrameSource-tests.yml'
   pull_request:
     paths:
-      - 'web-api/src/gpioPinService/**'
+      - 'web-api/src/sensorFrameSource/**'
       - 'web-api/package*.json'
       - 'web-api/tsconfig*.json'
       - 'web-api/vitest.config.ts'
-      - '.github/workflows/gpioPinService-tests.yml'
+      - '.github/workflows/sensorFrameSource-tests.yml'
 
 jobs:
   test:
@@ -43,9 +43,9 @@ jobs:
         working-directory: web-api
         run: npm run typecheck
         
-      - name: Run GPIO Pin Service tests
+      - name: Run sensor frame source tests
         working-directory: web-api
-        run: npm test -- --run src/gpioPinService/
+        run: npm test -- --run src/sensorFrameSource/
         
       - name: Check code formatting
         working-directory: web-api

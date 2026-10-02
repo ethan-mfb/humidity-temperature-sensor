@@ -19,9 +19,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          # Using Node.js 18 for CI to avoid crypto polyfill issues with Vitest
-          # Development still uses Node.js 16 as required for onoff library
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: 'web-api/package-lock.json'
 

@@ -104,4 +104,4 @@ export type TempSensorError =
 
 ---
 
-For further details, see the Temp Sensor Service and GPIO Pin Service specifications.
+For further details, see the Temp Sensor Service specification.

@@ -1,23 +1,21 @@
-import { STATUS_TYPES } from "../gpioPinService/constants.js";
 import { TEMP_SENSOR_STATUS } from "../tempSensorController/constants.js";
-import { createGpioPin, unwrapGpioPin } from "../types/nominal-utils.js";
 import { getErrorReason } from "../utils.js";
 import {
+  MIN_READ_INTERVAL_MS,
   TEMP_SENSOR_ERROR_TYPES,
   TEMP_SENSOR_EVENT_TYPES,
   TEMP_SENSOR_MESSAGES,
   TEMP_SENSOR_OUTCOMES,
-  targetDataGpioPin,
 } from "./constants.js";
 import { decodeFrame } from "./decoder.js";
-import { createPulseAccumulator } from "./pulseAccumulator.js";
+import { toPulses } from "./edges.js";
 import {
   createInitialTempSensorState,
   reduceTempSensorState,
 } from "./reducer.js";
 import { isTempSensorError } from "./types.guards.js";
 import type {
-  GpioEdge,
+  FrameCapture,
   TempSensorError,
   TempSensorEvent,
   TempSensorReading,
@@ -30,18 +28,18 @@ import type {
 /**
  * Builds the temperature sensor service.
  *
- * The GPIO pin service is injected, so the whole service can be exercised
- * against a simulated edge stream. Recoverable problems are emitted as error
- * values; only a failed start or stop throws, since those leave the service
- * unable to continue.
+ * The frame source is injected, so the whole service can be exercised against
+ * captured or synthesised frames with no hardware. Recoverable problems are
+ * emitted as error values; only a failed start or stop throws, since those
+ * leave the service unable to continue.
  */
 export function createTempSensorService(
   dependencies: TempSensorServiceDependencies,
 ): TempSensorService {
-  const pin = dependencies.pin ?? createGpioPin(targetDataGpioPin);
-  const accumulator = createPulseAccumulator();
+  const readIntervalMs = dependencies.readIntervalMs ?? MIN_READ_INTERVAL_MS;
   const subscribers = new Set<TempSensorSubscriber>();
   let state: TempSensorState = createInitialTempSensorState();
+  let readTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
   function dispatch(event: TempSensorEvent): void {
     state = reduceTempSensorState(state, event);
@@ -83,14 +81,16 @@ export function createTempSensorService(
     return state.status === TEMP_SENSOR_STATUS.RUNNING;
   }
 
-  function handleGpioEdge(edge: GpioEdge): void {
-    if (!isRunning()) return;
+  function publishFrame(capture: FrameCapture): void {
+    if (capture.error !== null) {
+      publishError({
+        type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
+        message: capture.error,
+      });
+      return;
+    }
 
-    const framePulses = accumulator.addEdge(edge);
-
-    if (framePulses === undefined) return;
-
-    const result = decodeFrame(framePulses);
+    const result = decodeFrame(toPulses(capture.edges));
 
     if (isTempSensorError(result)) {
       publishError(result);
@@ -100,43 +100,56 @@ export function createTempSensorService(
     publishReading(result);
   }
 
-  function handleGpioError(reason: string): void {
+  /**
+   * Reads one frame, then schedules the next.
+   *
+   * Self-scheduling rather than an interval: a read that runs long must not
+   * overlap the next one, because the sensor answers a single start signal.
+   */
+  async function readOnce(): Promise<void> {
     if (!isRunning()) return;
 
-    accumulator.reset();
-    publishError({ type: TEMP_SENSOR_ERROR_TYPES.SIGNAL, message: reason });
+    try {
+      const capture = await dependencies.frameSource.readFrame();
+      // The service may have been stopped while the read was in flight.
+      if (!isRunning()) return;
+      publishFrame(capture);
+    } catch (e: unknown) {
+      if (!isRunning()) return;
+      publishError({
+        type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
+        message: getErrorReason(e),
+      });
+    } finally {
+      scheduleNextRead();
+    }
   }
 
-  /** The polling child exiting on its own leaves the service stopped. */
-  function handleGpioStatus(status: { status: string; pin?: number }): void {
-    if (status.status !== STATUS_TYPES.EXITED || !isRunning()) return;
+  function scheduleNextRead(): void {
+    if (!isRunning()) return;
 
-    dispatch({ type: TEMP_SENSOR_EVENT_TYPES.STOPPED });
-    accumulator.reset();
-    dependencies.loggingService?.warning({
-      message: "GPIO polling exited while the temp sensor was running",
-      pin: status.pin,
-    });
+    readTimer = setTimeout(() => {
+      void readOnce();
+    }, readIntervalMs);
   }
 
-  // The GPIO pin service has no unsubscribe, so subscribe once here and let
-  // the handlers ignore events that arrive while stopped.
-  dependencies.gpioPinService.onData(handleGpioEdge);
-  dependencies.gpioPinService.onError(handleGpioError);
-  dependencies.gpioPinService.onStatus(handleGpioStatus);
+  function cancelScheduledRead(): void {
+    if (readTimer === undefined) return;
+
+    clearTimeout(readTimer);
+    readTimer = undefined;
+  }
 
   async function start(): Promise<void> {
     if (isRunning()) {
       throw new Error(TEMP_SENSOR_MESSAGES.ALREADY_RUNNING);
     }
 
-    accumulator.reset();
-    await dependencies.gpioPinService.startPolling(unwrapGpioPin(pin));
     dispatch({ type: TEMP_SENSOR_EVENT_TYPES.STARTED });
-    dependencies.loggingService?.debug({
-      message: "Temp sensor started",
-      pin: unwrapGpioPin(pin),
-    });
+    dependencies.loggingService?.debug({ message: "Temp sensor started" });
+
+    // Read straight away, so the first reading does not wait out an interval.
+    await readOnce();
   }
 
   async function stop(): Promise<void> {
@@ -144,9 +157,9 @@ export function createTempSensorService(
       throw new Error(TEMP_SENSOR_MESSAGES.ALREADY_STOPPED);
     }
 
-    await dependencies.gpioPinService.stopPolling();
+    cancelScheduledRead();
     dispatch({ type: TEMP_SENSOR_EVENT_TYPES.STOPPED });
-    accumulator.reset();
+    await dependencies.frameSource.close();
     dependencies.loggingService?.debug({ message: "Temp sensor stopped" });
   }
 
@@ -197,11 +210,13 @@ export function createTempSensorService(
 }
 
 export { decodeFrame } from "./decoder.js";
-export { createPulseAccumulator } from "./pulseAccumulator.js";
+export { toPulses } from "./edges.js";
 export { isTempSensorError } from "./types.guards.js";
 export type {
   Bit,
+  FrameCapture,
   Pulse,
+  SensorFrameSource,
   TempSensorError,
   TempSensorReading,
   TempSensorService,

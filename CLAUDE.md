@@ -68,7 +68,9 @@ This is a **Raspberry Pi IoT sensor application** for reading DHT22/AM2302 tempe
 
 ### Core Architecture Patterns
 
-**Process Isolation Design**: GPIO operations run in isolated child processes to prevent hardware issues from crashing the main API server. Communication uses strongly-typed Node.js IPC.
+**Ports and adapters**: the temp sensor service declares the `SensorFrameSource` port it reads through; implementations live in `sensorFrameSource/`. `src/index.ts` is the composition root and the only module that names one.
+
+**Process isolation**: the timing-critical GPIO work is a C helper, spawned per read, so a hardware stall cannot take the API server with it.
 
 **Event-Driven Services**: All services follow event-driven patterns with subscription-based APIs. Services emit typed events and handle failures gracefully without blocking.
 
@@ -76,27 +78,27 @@ This is a **Raspberry Pi IoT sensor application** for reading DHT22/AM2302 tempe
 
 ### Service Layer Architecture
 
-1. **GPIO Pin Polling Service** (`gpioPinPollingService/`)
-   - Low-level hardware interface running in child process
-   - Direct GPIO access using `onoff` library
-   - Real-time polling with IPC communication via `GpioPollingCommand` ↔ `GpioPollingMessage` types
+1. **Sensor Frame Source** (`sensorFrameSource/`)
+   - Implements the port the temp sensor service reads through
+   - `libgpiod.ts` wraps the `dht22-capture` package, which spawns the C helper
+   - Swapping the mechanism is a new module here plus a line in `src/index.ts`
 
 2. **Temperature Sensor Service** (`tempSensorService/`)
-   - High-level DHT22/AM2302 sensor data processing
-   - Transforms GPIO signals into temperature/humidity readings
+   - Owns when to read and what the edges mean
    - Signal decoding per sensor datasheet with checksum validation
+   - Reads schedule themselves so a slow read cannot overlap the next
 
-3. **Child Process Service** (`childProcessService/`)
-   - Process lifecycle management abstraction
-   - Handles start/stop of child processes with typed interfaces
-   - IPC message routing and error handling
+3. **DHT22 Capture Package** (`dht22-capture/`, outside web-api)
+   - The C helper and its node wrapper, shared with `scripts/`
+   - Must be built where it runs: `npm run build` needs `libgpiod-dev`
 
 ### Data Flow
-Hardware → GPIO Polling Service (child process) → Temperature Sensor Service → Controllers → HTTP API
+Hardware → gpiod-capture (C, spawned per read) → dht22-capture → Sensor Frame Source → Temperature Sensor Service → Controllers → HTTP API
 
 ### Key Technical Constraints
 
-- **Node.js v16**: Required for `onoff` library compatibility
+- **Node.js v20+**: `onoff` pinned this to v16; the GPIO work is now a spawned C helper, so the runtime is free
+- **libgpiod v2**: `libgpiod-dev` and a compiler are needed wherever the helper is built
 - **Express.js**: RESTful API with OpenAPI 3.1.0 specification
 - **TypeScript**: Strict typing enforced throughout codebase
 - **Hardware**: Raspberry Pi GPIO pins for sensor communication

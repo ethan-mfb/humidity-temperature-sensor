@@ -9,7 +9,6 @@ import type {
   TempSensorService,
   TempSensorStatusType,
 } from "../tempSensorController/types.js";
-import type { GpioPinService } from "../gpioPinService/types.js";
 import type { LoggingService } from "../loggingService/types.js";
 import type {
   TEMP_SENSOR_EVENT_TYPES,
@@ -83,10 +82,36 @@ export type PulseAccumulator = {
   reset: () => void;
 };
 
+/** The outcome of one triggered read of the sensor. */
+export type FrameCapture = {
+  /** Every edge the sensor produced. Empty when the read failed. */
+  readonly edges: readonly GpioEdge[];
+  /**
+   * Why the read produced nothing, or null. A failed read is recoverable: the
+   * service reports it and tries again on the next interval.
+   */
+  readonly error: string | null;
+};
+
+/**
+ * The port this service reads the sensor through.
+ *
+ * Declared here, by the consumer, rather than by any implementation of it, so
+ * that swapping how the hardware is reached is a new module and a line in the
+ * composition root. The AM2302 is request/response -- one start signal, one
+ * frame -- so the port is a single triggered read, not a stream.
+ */
+export type SensorFrameSource = {
+  /** Drives one start signal and resolves with the edges the sensor answered with. */
+  readFrame(): Promise<FrameCapture>;
+  /** Releases whatever the source holds. Safe to call when already closed. */
+  close(): Promise<void>;
+};
+
 /** Dependencies injected into the service factory. */
 export type TempSensorServiceDependencies = {
-  gpioPinService: GpioPinService;
-  /** Defaults to `targetDataGpioPin`. */
-  pin?: GpioPin;
+  frameSource: SensorFrameSource;
+  /** Defaults to the sensor's minimum, 2000ms. Faster requests return a stale frame. */
+  readIntervalMs?: number;
   loggingService?: LoggingService;
 };
