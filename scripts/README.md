@@ -128,6 +128,10 @@ cd ~/humidity-temperature-sensor/scripts
 node capture-sensor.mjs --samples 30 --out baseline.jsonl
 ```
 
+`node: command not found` here means nvm installed into `~/.bashrc` after the
+shell you are in had already read it. `source ~/.bashrc`, or open a new ssh
+session.
+
 Copying the two files across by hand instead, from a machine that can reach the
 pi:
 

@@ -118,6 +118,20 @@ else
 fi
 
 say "Setup complete"
+
+# nvm appends its source line to ~/.bashrc, which the calling shell read before
+# this script ran, so node is on PATH here but not out there.
+if [ "$SKIP_NODE" -eq 0 ]; then
+  cat <<EOF
+  node is not on the calling shell's PATH yet — nvm appends to ~/.bashrc, which
+  that shell has already read. Pick up the change with:
+
+    source ~/.bashrc
+
+  or open a new ssh session.
+EOF
+fi
+
 cat <<EOF
   Capture:   cd ${SCRIPT_DIR} && node capture-sensor.mjs --samples 30 --out baseline.jsonl
   Node path: $(command -v node || echo '(node not installed)')
