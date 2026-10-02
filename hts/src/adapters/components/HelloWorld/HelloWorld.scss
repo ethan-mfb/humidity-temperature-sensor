@@ -1,0 +1,13 @@
+@use "../../../styles/tokens";
+
+.hello-world {
+  display: grid;
+  place-items: center;
+  padding: tokens.$space-lg tokens.$space-md;
+
+  &__title {
+    margin: 0;
+    font-size: clamp(2rem, 8vw, 4rem);
+    color: tokens.$color-brand;
+  }
+}

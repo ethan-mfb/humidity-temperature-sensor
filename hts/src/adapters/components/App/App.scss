@@ -1,0 +1,32 @@
+@use "../../../styles/tokens";
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: tokens.$space-sm tokens.$space-md;
+    color: tokens.$color-brand-contrast;
+    background-color: tokens.$color-brand;
+  }
+
+  &__name {
+    font-weight: 700;
+  }
+
+  &__main {
+    display: grid;
+    place-items: center;
+  }
+
+  &__footer {
+    padding: tokens.$space-sm tokens.$space-md;
+    font-size: 0.875rem;
+    text-align: center;
+    color: tokens.$color-text-muted;
+  }
+}

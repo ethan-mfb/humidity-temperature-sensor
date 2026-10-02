@@ -1,0 +1,22 @@
+// Colors are rgba() variables, never hex codes (see LLM_INSTRUCTIONS.md).
+$color-brand: rgba(24, 64, 96, 1);
+$color-brand-contrast: rgba(250, 250, 250, 1);
+$color-accent: rgba(220, 72, 56, 1);
+$color-surface: rgba(250, 250, 250, 1);
+$color-text: rgba(28, 32, 36, 1);
+$color-text-muted: rgba(28, 32, 36, 0.6);
+$color-border: rgba(28, 32, 36, 0.16);
+
+$font-family-base:
+  system-ui,
+  -apple-system,
+  "Segoe UI",
+  Roboto,
+  sans-serif;
+
+$space-xs: 0.25rem;
+$space-sm: 0.5rem;
+$space-md: 1rem;
+$space-lg: 2rem;
+
+$radius: 0.5rem;
