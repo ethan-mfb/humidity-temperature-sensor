@@ -12,6 +12,7 @@ import type {
 } from "./types.js";
 import { isGpioPollingMessage } from "./types.guards.js";
 import { getErrorReason } from "../utils.js";
+import { createGpioPin } from "../types/nominal-utils.js";
 import { resolveFromModule } from "../dirname.js";
 import {
   TIMEOUTS,
@@ -49,12 +50,21 @@ export function createGpioPinService(): GpioPinService {
       });
 
       onChildProcessEvent(childProcess, EVENT_TYPES.MESSAGE, (event) => {
-        if (
-          event.type === EVENT_TYPES.MESSAGE &&
-          isGpioPollingMessage(event.data)
-        ) {
-          handleChildMessage(event.data);
+        if (event.type !== EVENT_TYPES.MESSAGE) {
+          return;
         }
+
+        if (!isGpioPollingMessage(event.data)) {
+          // Dropping these silently once hid the fact that the child and this
+          // guard disagreed about the shape of a reading. Surface them.
+          emitter.emit(
+            EVENT_TYPES.ERROR,
+            `Unrecognised message from the GPIO polling child: ${JSON.stringify(event.data)}`,
+          );
+          return;
+        }
+
+        handleChildMessage(event.data);
       });
 
       onChildProcessEvent(childProcess, EVENT_TYPES.ERROR, (event) => {
@@ -150,7 +160,7 @@ export function createGpioPinService(): GpioPinService {
       await stopPolling();
     }
 
-    await sendCommand({ type: COMMAND_TYPES.START, pin });
+    await sendCommand({ type: COMMAND_TYPES.START, pin: createGpioPin(pin) });
   }
 
   async function stopPolling(): Promise<void> {

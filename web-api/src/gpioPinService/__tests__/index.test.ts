@@ -317,6 +317,32 @@ describe("createGpioPinService", () => {
   });
 
   describe("error handling", () => {
+    it("should report a message it cannot understand instead of dropping it", async () => {
+      const errorCallback = vi.fn();
+      service.onError(errorCallback);
+
+      const startPromise = service.startPolling(TEST_DATA.PIN);
+      const messageHandler = messageHandlers.get(EVENT_TYPES.MESSAGE);
+      messageHandler!({
+        type: EVENT_TYPES.MESSAGE,
+        data: {
+          type: MESSAGE_TYPES.STATUS,
+          status: STATUS_TYPES.STARTED,
+          pin: TEST_DATA.PIN,
+        },
+      });
+      await startPromise;
+
+      messageHandler!({
+        type: EVENT_TYPES.MESSAGE,
+        data: { type: MESSAGE_TYPES.DATA, payload: { pin: 4, value: 1 } },
+      });
+
+      expect(errorCallback).toHaveBeenCalledWith(
+        expect.stringContaining("Unrecognised message"),
+      );
+    });
+
     it("should handle child process errors", async () => {
       const errorCallback = vi.fn();
       const statusCallback = vi.fn();

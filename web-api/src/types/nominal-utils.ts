@@ -10,6 +10,9 @@ import type {
   Microseconds,
 } from "./nominal-types.js";
 
+/** Divisor for turning the monotonic clock's nanoseconds into microseconds. */
+const NANOSECONDS_PER_MICROSECOND = 1000n;
+
 // Type guard functions for creating nominal types
 export const createGpioPin = (value: number): GpioPin => {
   if (!Number.isInteger(value) || value < 0 || value > 40) {
@@ -72,6 +75,19 @@ export const createMicroseconds = (value: number): Microseconds => {
   }
   return value as Microseconds;
 };
+
+/**
+ * Microseconds elapsed on the monotonic clock.
+ *
+ * GPIO edges are timed by the gap between them, not by when they happened, so
+ * this is a tick count rather than a wall-clock time. `Timestamp` cannot stand
+ * in for it: an ISO-8601 string stops at milliseconds, and a 0 bit (~26us) and
+ * a 1 bit (~70us) would serialize identically.
+ */
+export const createEdgeTimestampUs = (
+  nanoseconds: bigint = process.hrtime.bigint(),
+): Microseconds =>
+  createMicroseconds(Number(nanoseconds / NANOSECONDS_PER_MICROSECOND));
 
 // Utility functions for working with nominal types
 export const unwrapGpioPin = (pin: GpioPin): number => pin as number;

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { isGpioPollingMessage } from "../types.guards.js";
+import type { GpioPollingMessage } from "../../gpioPinPollingService/types.js";
+import {
+  createEdgeTimestampUs,
+  createGpioPin,
+  createGpioValue,
+} from "../../types/nominal-utils.js";
 
 describe("isGpioPollingMessage", () => {
   it("should validate data messages", () => {
@@ -85,5 +91,23 @@ describe("isGpioPollingMessage", () => {
     withoutType.forEach((obj) => {
       expect(isGpioPollingMessage(obj)).toBe(false);
     });
+  });
+});
+
+describe("isGpioPollingMessage contract with the polling child", () => {
+  it("accepts a data message carrying the values the child puts in it", () => {
+    // Built with the child's own constructors. The guard and the child used to
+    // disagree about `timestamp` -- the child sent an ISO string, the guard
+    // required a number -- so every reading was dropped without a trace.
+    const message: GpioPollingMessage = {
+      type: "data",
+      payload: {
+        pin: createGpioPin(4),
+        value: createGpioValue(1),
+        timestamp: createEdgeTimestampUs(),
+      },
+    };
+
+    expect(isGpioPollingMessage(message)).toBe(true);
   });
 });

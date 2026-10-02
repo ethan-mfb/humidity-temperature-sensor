@@ -1,24 +1,13 @@
-import {
-  COMMAND_TYPES,
-  MESSAGE_TYPES,
-  STATUS_TYPES,
-  type CommandType,
-  type MessageType,
-  type StatusType,
-} from "./constants.js";
-
-// Shared message types for GPIO pin service
-export type GpioPollingCommand =
-  | { type: typeof COMMAND_TYPES.START; pin: number }
-  | { type: typeof COMMAND_TYPES.STOP };
-
-export type GpioPollingMessage =
-  | {
-      type: typeof MESSAGE_TYPES.DATA;
-      payload: { pin: number; value: number; timestamp: number };
-    }
-  | { type: typeof MESSAGE_TYPES.ERROR; reason: string }
-  | { type: typeof MESSAGE_TYPES.STATUS; status: StatusType; pin?: number };
+/**
+ * The IPC contract is declared once, by the child that sends it. This file used
+ * to restate it with plain `number`s, and the two copies drifted: the child sent
+ * `timestamp` as an ISO string while this side expected a number, so the guard
+ * rejected every reading. Re-exporting keeps a drift like that a build error.
+ */
+export type {
+  GpioPollingCommand,
+  GpioPollingMessage,
+} from "../gpioPinPollingService/types.js";
 
 export type GpioPinService = {
   startPolling(pin: number): Promise<void>;

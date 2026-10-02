@@ -4,7 +4,7 @@ import { getErrorReason } from "../utils.js";
 import { isGpioPollingCommand } from "./types.guards.js";
 import {
   createGpioValue,
-  createTimestamp,
+  createEdgeTimestampUs,
   unwrapGpioPin,
 } from "../types/nominal-utils.js";
 import type { GpioPin } from "../types/nominal-types.js";
@@ -69,7 +69,7 @@ export function createGpioPollingService(): GpioPollingService {
           payload: {
             pin: message.pin,
             value: createGpioValue(value),
-            timestamp: createTimestamp(),
+            timestamp: createEdgeTimestampUs(),
           },
         });
       });
