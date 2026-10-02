@@ -35,6 +35,7 @@ sudo chown -R "$USER:$USER" "$WEB_ROOT"
 say "Installing the $SITE_NAME site"
 sudo install -m 644 "$SCRIPT_DIR/nginx-hts.conf" "/etc/nginx/sites-available/$SITE_NAME"
 sudo ln -sfn "/etc/nginx/sites-available/$SITE_NAME" "/etc/nginx/sites-enabled/$SITE_NAME"
+# The default site listens on port 80, which the web-api owns.
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo mkdir -p "$CERT_DIR"
 
