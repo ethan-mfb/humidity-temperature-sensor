@@ -7,7 +7,7 @@
     "jsx": "react-jsx",
     "types": [
       "vite/client",
-      "vite-plugin-pwa/client",
+      "vite-plugin-pwa/vanillajs",
       "vitest/globals",
       "@testing-library/jest-dom"
     ],
