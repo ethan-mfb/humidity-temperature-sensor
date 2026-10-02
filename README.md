@@ -270,7 +270,7 @@ and run the commands there. Nothing in the repo connects to the pi for you.
    sudo chmod 600 /etc/ssl/hts/hts.key
    ```
 
-1. **Install nginx and the site**, from the clone made in [Setting up the pi](#setting-up-the-pi):
+1. **Install the site**, from the clone made in [Setting up the pi](#setting-up-the-pi):
 
    ```sh
    cd ~/humidity-temperature-sensor
@@ -279,9 +279,13 @@ and run the commands there. Nothing in the repo connects to the pi for you.
    ./setup-pi-hosting.sh
    ```
 
-   It installs nginx, enables the hts site, removes nginx's default site (which would take port
-   80 from the web-api), and creates `/var/www/hts/releases`, owned by `alpha`. It is safe to
-   re-run.
+   nginx comes with the [pi image](./image/README.md), already without its default site (which
+   would take port 80 from the web-api). The script adds the hts site, enables it once the
+   certificate from the previous step is in place, and creates `/var/www/hts/releases`, owned by
+   `alpha`. It is safe to re-run.
+
+   > On a pi flashed before nginx was added to the image, the script stops and says so. Reflash, or
+   > run `sudo apt-get install -y nginx && sudo rm -f /etc/nginx/sites-enabled/default` first.
 
 1. `exit` the pi
 

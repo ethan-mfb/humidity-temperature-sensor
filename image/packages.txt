@@ -11,3 +11,7 @@ python3
 libgpiod-dev
 pkg-config
 gpiod
+
+# Serves the hts PWA (hts/deploy/nginx-hts.conf). build-image.sh removes its
+# default site, which would take port 80 from the web-api.
+nginx

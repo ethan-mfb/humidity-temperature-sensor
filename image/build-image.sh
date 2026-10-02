@@ -174,6 +174,14 @@ in_chroot apt-get install -y "${PACKAGES[@]}"
 in_chroot apt-get clean
 rm -rf "$MNT"/var/lib/apt/lists/*
 
+# nginx enables a default site on port 80, which the web-api's service owns.
+# With it gone, nginx starts on boot listening on nothing until
+# hts/deploy/setup-pi-hosting.sh adds the hts site on 443.
+if [ -e "$MNT/etc/nginx/sites-enabled/default" ]; then
+  rm -f "$MNT/etc/nginx/sites-enabled/default"
+  ok "removed nginx's default site"
+fi
+
 say "Restoring first-boot state"
 if [ -e "$WORK_DIR/machine-id.orig" ]; then
   cp -a "$WORK_DIR/machine-id.orig" "$MNT/etc/machine-id"

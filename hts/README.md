@@ -103,7 +103,8 @@ over plain http the app loads but can neither install nor update. `deploy/` has 
 
 - `nginx-hts.conf`: the site, on port 443 only. It never lets an http cache hold `sw.js`,
   `index.html` or the manifest, and caches the hashed files in `/assets/` for a year.
-- `setup-pi-hosting.sh`: one-time setup, run on the pi after you ssh in.
+- `setup-pi-hosting.sh`: one-time setup, run on the pi after you ssh in. nginx itself comes with
+  the [pi image](../image/README.md).
 
 The app is at <https://rpi20w.local/>. Port 80 stays with the web-api's systemd service (see
 [Running the web-api as a service](../README.md#running-the-web-api-as-a-service)), so

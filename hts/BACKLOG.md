@@ -40,6 +40,7 @@ A Product Backlog item is Done, and part of the Increment, only when all of thes
 | 7   | e2e tests for install criteria, offline loading and updates             | Done   |
 | 8   | nginx config and manual deploy steps for the pi                         | Done   |
 | 9   | CI running the Definition of Done checks on pushes touching `hts/`      | Done   |
+| 10  | nginx in the pi image, without its default site                         | Done   |
 
 Found and fixed during the Sprint, by the e2e suite: the manifest was precached twice, which emptied
 the precache, and a tab opened before the app was cached never reloaded onto an accepted update.
@@ -48,8 +49,9 @@ the precache, and a tab opened before the app was cached never reloaded onto an 
 
 In order. Refine items before pulling them into a Sprint.
 
-1. **Run hosting on the real pi.** Run `setup-pi-hosting.sh`, issue the certificate, deploy, and
-   install the app on a phone and a laptop. Nothing in Sprint 1 has run on the pi yet.
+1. **Run hosting on the real pi.** Build and flash the image (it now includes nginx), issue the
+   certificate, run `setup-pi-hosting.sh`, deploy, and install the app on a phone and a laptop.
+   Nothing in Sprint 1 has run on the pi yet.
 1. **Decide how hts and the web-api share the pi.** Today the web-api owns port 80 and hts is
    on 443 only, so they are different origins. Either nginx takes 80 and 443 and proxies `/api`
    to the web-api on a local port (one origin, https for both, no CORS), or the web-api allows
@@ -58,7 +60,5 @@ In order. Refine items before pulling them into a Sprint.
    display them.
 1. **Handle the sensor being unreachable.** Show the last reading and its age when the API fails.
 1. **Recent history.** A chart of the last 24 hours.
-1. **Bake nginx into the pi image.** Add it to `image/packages.txt` once hosting has been proven on
-   the pi.
 1. **Install on iOS.** Safari never fires `beforeinstallprompt`; show "Add to Home Screen"
    instructions there instead of the install button.

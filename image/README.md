@@ -18,6 +18,9 @@ Builds a Raspberry Pi OS Lite (64-bit) image with the packages in
    the filesystem to fill the new space.
 1. Mounts both partitions, chroots in and runs `apt-get install` on
    `packages.txt`.
+1. Removes nginx's default site, which would take port 80 from the web-api.
+   nginx starts on boot with no sites until the hts site is added; see
+   "Publishing the hts PWA" in the root README.
 1. Puts back everything that makes the first boot a first boot: an empty
    `machine-id`, no daemons started, and the image's original `resolv.conf`.
    It also writes `/etc/humidity-temp-sensor-image`, recording the base image
@@ -74,6 +77,10 @@ is kept for 14 days.
 > image is trixie, which applies them through cloud-init.
 
 ## What is not in the image
+
+The hts site, its certificate and its releases. nginx is in the image, but
+those are per pi and set up by hand after flashing; see "Publishing the hts
+PWA" in the root README.
 
 Node 16. The README installs it with nvm into `~alpha/.nvm`, and that user
 does not exist until Imager's customization creates it at first boot. Run
