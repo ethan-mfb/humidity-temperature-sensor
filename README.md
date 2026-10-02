@@ -225,6 +225,133 @@ References
 
 - <https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html>
 
+### Publishing the hts PWA
+
+`hts/` is the frontend, a PWA served by nginx on the pi at <https://rpi20w.local/>. It is built in
+the dev container; the pi only serves the built files, so it needs no node for this. Port 80 stays
+with the web-api, so nginx only listens on 443. [hts/README.md](./hts/README.md) covers the
+architecture and the scripts in more detail.
+
+#### One-time setup
+
+1. **Let the dev container ssh to the pi without a password.** `deploy.sh` runs ssh and scp several
+   times, and each one asks for the password otherwise.
+
+   ```sh
+   ssh-keygen -t ed25519        # skip if ~/.ssh/id_ed25519 already exists
+   ssh-copy-id alpha@rpi20w.local
+   ```
+
+1. **Make a certificate.** Service workers only run over https, and only with a certificate the
+   browser trusts, so without one the app can neither install nor update. On a machine with
+   [mkcert](https://github.com/FiloSottile/mkcert) (it is not in the dev container):
+
+   ```sh
+   mkcert -install
+   mkcert -cert-file hts.crt -key-file hts.key rpi20w.local
+   ```
+
+1. **Trust mkcert's CA on every phone and laptop that will use the app.** `mkcert -CAROOT` prints
+   where `rootCA.pem` is. See [Hosting on the pi](./hts/README.md#one-time-setup) for Android and
+   iOS. Never copy `rootCA-key.pem` anywhere.
+
+1. **Put the certificate on the pi:**
+
+   ```sh
+   scp hts.crt hts.key alpha@rpi20w.local:
+   ssh alpha@rpi20w.local 'sudo mkdir -p /etc/ssl/hts \
+     && sudo mv hts.crt hts.key /etc/ssl/hts/ \
+     && sudo chmod 600 /etc/ssl/hts/hts.key'
+   ```
+
+1. **Install nginx and the site on the pi**, from the clone made in
+   [Setting up the pi](#setting-up-the-pi):
+
+   ```sh
+   ssh alpha@rpi20w.local
+   cd ~/humidity-temperature-sensor
+   git pull
+   cd hts/deploy
+   ./setup-pi-hosting.sh
+   ```
+
+   It installs nginx, enables the hts site, removes nginx's default site (which would take port
+   80 from the web-api), and creates `/var/www/hts` for releases. It is safe to re-run.
+
+#### Building
+
+In the dev container:
+
+```sh
+cd hts
+npm ci
+npm run test:once
+npm run test:e2e        # first time: npx playwright install --with-deps chromium
+npm run build           # type checks, then writes dist/
+npm run preview         # optional: try the build at http://localhost:4173
+```
+
+`deploy.sh` builds again before it uploads, so this step is for checking a release before it goes
+out.
+
+#### Releasing
+
+Each release gets a new version. The version shows in the app's footer, which is how to tell what a
+phone or laptop is running.
+
+1. start from an up to date, clean `main`: `git pull`, then `git status` should show nothing
+1. bump the version (`patch`, `minor` or `major`):
+
+   ```sh
+   cd hts
+   npm version patch --no-git-tag-version
+   ```
+
+1. commit, tag and push:
+
+   ```sh
+   VERSION=$(node -p "require('./package.json').version")
+   git commit -am "hts: hts/package.json, hts/package-lock.json: Release $VERSION."
+   git tag "hts-v$VERSION"
+   git push origin main "hts-v$VERSION"
+   ```
+
+> `deploy.sh` builds whatever is in the working tree. Deploy straight after pushing the release
+> commit, with nothing uncommitted, so the pi always runs a tagged commit.
+
+#### Publishing
+
+From `hts/` in the dev container:
+
+```sh
+./deploy/deploy.sh                       # alpha@rpi20w.local
+./deploy/deploy.sh alpha@192.168.4.35    # if rpi20w.local does not resolve
+```
+
+It builds, uploads the build to `/var/www/hts/releases/<timestamp>` and switches the
+`/var/www/hts/current` symlink to it in one step, so nginx never serves half of one version and half
+of another. The newest three releases are kept.
+
+1. open <https://rpi20w.local/> and check the footer shows the new version
+1. copies of the app that are already installed or open show "A new version is available." within
+   an hour, or the next time they are launched. **Update** switches to it.
+
+Rolling back points `current` at an older release:
+
+```sh
+ssh alpha@rpi20w.local 'ls /var/www/hts/releases'
+ssh alpha@rpi20w.local 'ln -sfn /var/www/hts/releases/<timestamp> /var/www/hts/current'
+```
+
+Clients only see a version as new if it differs from what they cached, so they also pick up the
+rollback on their next check.
+
+Day to day
+
+- `sudo systemctl status nginx` to check the server
+- `sudo tail -f /var/log/nginx/error.log` to follow its errors
+- `ls -l /var/www/hts/current` to see which release is live
+
 ### Connecting the sensor
 
 1. connect the left pin (i.e. +) to pin 1 for 3,3V of power
