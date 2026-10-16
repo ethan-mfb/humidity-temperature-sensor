@@ -5,8 +5,9 @@
 # Installs the hts site into nginx, which the pi image provides, creates the
 # directory releases are unpacked into, and (re)installs pi-status from
 # image/pi-status. pi-status then decides whether nginx serves hts or a status
-# page listing what is missing. Making the certificate, and deploying, are
-# done by hand; see "Publishing the hts PWA" in the root README.
+# page listing what is missing. scripts/setup-pi.sh runs it, after installing
+# the certificate. Making the certificate is done by hand, and install-hts.sh
+# deploys; see "Publishing the hts PWA" in the root README.
 #
 # Idempotent — safe to re-run. Run it on the pi, not in the dev container.
 #
@@ -24,7 +25,7 @@ DEPLOY_USER="$(id -un)"
 
 case "${1:-}" in
   "") ;;
-  -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
+  -h|--help) sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
   *) echo "Unknown option: $1" >&2; exit 2 ;;
 esac
 

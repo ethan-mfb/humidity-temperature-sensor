@@ -106,8 +106,11 @@ over plain http the app loads but can neither install nor update. `deploy/` has 
   `index.html` or the manifest, and caches the hashed files in `/assets/` for a year. It proxies
   `/api/` and `/api-docs/` to the web-api on port 3000, unbuffered so the reading stream's events
   arrive as they are sent.
-- `setup-pi-hosting.sh`: one-time setup, run on the pi after you ssh in. nginx itself comes with
-  the [pi image](../image/README.md).
+- `setup-pi-hosting.sh`: one-time setup, run on the pi by `scripts/setup-pi.sh`. nginx itself
+  comes with the [pi image](../image/README.md).
+- `install-hts.sh`: installs a release on the pi, run after you ssh in. It downloads the build the
+  **hts Release** workflow attached to the release, unpacks it, switches the `current` symlink to
+  it and removes old releases. `npm run test:deploy` tests it.
 
 If hts cannot be served (no certificate, an expired one, no release), the pi's `pi-status` boot
 check serves a status page at <http://rpi20w.local/> saying what is wrong, instead of nginx failing
@@ -121,8 +124,8 @@ worker leaves `/api/` and `/api-docs/` to the network instead of answering them 
 web-api itself listens on port 3000 (see
 [Running the web-api as a service](../README.md#running-the-web-api-as-a-service)).
 
-Deploying is done by hand: build and package in the dev container, `scp` the package to the pi,
-then ssh in, unpack it as a release and switch the `current` symlink to it. The steps are in
+Deploying is done by hand: tag a release, which CI builds, then ssh into the pi and run
+`deploy/install-hts.sh`. The steps are in
 [Publishing the hts PWA](../README.md#publishing-the-hts-pwa) in the root README.
 
 > Sprint 1 tested the nginx config and the release switch in the dev container but has not run them

@@ -54,6 +54,11 @@ References
 
 ### Setting up the pi
 
+`setup-pi.sh` takes a freshly flashed pi to serving hts at <https://rpi20w.local/>. Copy the hts
+certificate to the pi first, steps 1 to 3 of [One-time setup](#one-time-setup). Without it the
+script still finishes, but nginx serves a status page until the certificate is there and the script
+is re-run.
+
 1. `ssh alpha@rpi20w.local`
 1. clone the repository
 
@@ -62,9 +67,17 @@ References
    cd humidity-temperature-sensor/scripts
    ```
 
-1. run `./setup-pi.sh`. It installs node 20 through nvm, checks GPIO access, builds the capture
-   helper and captures one frame as a smoke test. It is safe to re-run.
-1. open a new shell, run `which node` and note the path. The service unit below needs it.
+1. run `./setup-pi.sh`. It is safe to re-run. In order, it:
+   1. installs node 20 through nvm, checks GPIO access, builds the capture helper and captures one
+      frame as a smoke test
+   1. builds the web-api from the clone and runs it as the `web-api` service
+      ([Running the web-api as a service](#running-the-web-api-as-a-service))
+   1. moves `~/hts.crt` and `~/hts.key` into `/etc/ssl/hts`, if they are there
+   1. sets up nginx for hts with `hts/deploy/setup-pi-hosting.sh`
+   1. installs the newest hts release, if none is live yet
+      ([Publishing](#publishing))
+1. open <https://rpi20w.local/>. If it does not load, <http://rpi20w.local/> lists what is missing
+   ([When the pi shows a status page](#when-the-pi-shows-a-status-page))
 
 > Clone on the pi rather than `scp`-ing from the dev container. `devcontainer.sh` runs the
 > container with container-only storage and no bind mount, so the working tree exists only inside
@@ -114,16 +127,20 @@ References
 
 ### Publishing the web-api
 
-1. `cd web-api`
-1. `npm install`
-1. `npm run package`
-1. unzip the contents of the web api zip in the `publish/` directory
-1. transfer it to `~/web-api/` on the pi
-1. `ssh alpha@rpi20w.local`
-1. `cd ~/web-api/`
-1. `npm install --omit=dev`
-1. `node index.js` to smoke test it
-1. navigate to `http://rpi20w.local:3000/`, then stop it with `ctrl+c`
+The pi runs the web-api from its clone, built by `setup-pi.sh`, so publishing a new version is a pull
+and a re-run, on the pi:
+
+```sh
+cd ~/humidity-temperature-sensor
+git pull
+scripts/setup-pi.sh
+```
+
+It rebuilds the capture helper and the web-api, rewrites the service unit and restarts the service.
+Then check <http://rpi20w.local:3000/>.
+
+> The web-api depends on `dht22-capture` as `file:../dht22-capture`, and the helper in it has to be
+> compiled on the pi. Running from the clone gives it both; a packaged copy on its own has neither.
 
 ### Publishing the capture tooling
 
@@ -158,49 +175,24 @@ and proxies `/api/` and `/api-docs/` to the web-api, so the app reaches the API 
 Port 3000 still answers directly, which is handy for debugging. systemd keeps the web-api running across
 reboots and restarts it if it crashes.
 
-1. `ssh alpha@rpi20w.local`
-1. create `/etc/systemd/system/web-api.service`
+`setup-pi.sh` writes the unit, `/etc/systemd/system/web-api.service`, then enables and restarts the
+service. The unit runs `dist/index.js` in `~/humidity-temperature-sensor/web-api` as `alpha`, with
+`PORT=3000`, `NODE_ENV=production` and `NoNewPrivileges=true`. systemd does not load nvm, so the unit
+names node by its absolute path. That path changes with every `nvm install`, so the script rewrites
+the unit on every run; re-run it after changing node.
 
-   ```ini
-   [Unit]
-   Description=humidity-temperature-sensor web-api
-   After=network-online.target
-   Wants=network-online.target
-
-   [Service]
-   Type=simple
-   User=alpha
-   WorkingDirectory=/home/alpha/web-api
-   # absolute path, systemd does not load nvm; replace with the output of `which node`
-   ExecStart=/home/alpha/.nvm/versions/node/v20.x.x/bin/node index.js
-   Environment=NODE_ENV=production
-   Environment=PORT=3000
-   NoNewPrivileges=true
-   Restart=always
-   RestartSec=5
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-
-1. run `sudo systemctl daemon-reload`
-1. run `sudo systemctl enable --now web-api`
-1. verify by navigating to <http://rpi20w.local:3000/>, and, once the hts site is installed, to
-   <https://rpi20w.local/api/temp-sensor/status> through nginx
+Verify by navigating to <http://rpi20w.local:3000/>, and, once hts is served, to
+<https://rpi20w.local/api/temp-sensor/status> through nginx.
 
 > Moving an existing pi off port 80: an older version of this unit had `Environment=PORT=80` and
-> `AmbientCapabilities=CAP_NET_BIND_SERVICE`. Change the first to `PORT=3000`, delete the second,
-> then run `sudo systemctl daemon-reload` and `sudo systemctl restart web-api`. Do this before
-> enabling the hts site, or nginx cannot bind port 80 and will not start.
+> `AmbientCapabilities=CAP_NET_BIND_SERVICE`, and was written by hand at `~/web-api`. Re-running
+> `setup-pi.sh` replaces it with the unit above. `~/web-api` can then be deleted.
 
 Day to day
 
 - `sudo systemctl status web-api` to check the service
-- `sudo systemctl restart web-api` after publishing a new build
+- `sudo systemctl restart web-api` to restart it
 - `journalctl -u web-api -f` to follow the logs
-
-> The nvm path changes with every `nvm install`. If that gets annoying, install node 20 from
-> NodeSource so it lands at `/usr/bin/node` and keep nvm for the dev container only.
 
 > The `start` and `stop` endpoints drive the GPIO pin and have no authentication, so keep the
 > pi on a trusted network and do not port forward to it.
@@ -211,14 +203,14 @@ References
 
 ### Publishing the hts PWA
 
-`hts/` is the frontend, a PWA served by nginx on the pi at <https://rpi20w.local/>. It is built in
-the dev container; the pi only serves the built files, so it needs no node for this. nginx also
-listens on port 80, only to redirect to https. It also proxies `/api/` and `/api-docs/` to the
-web-api on port 3000, so the app and the API share one https origin. [hts/README.md](./hts/README.md) covers the
-architecture and the npm scripts.
+`hts/` is the frontend, a PWA served by nginx on the pi at <https://rpi20w.local/>. The **hts
+Release** workflow builds it when a release is tagged, and the pi downloads the build from the GitHub
+release, so the pi needs no node for it. nginx also listens on port 80, only to redirect to https. It
+also proxies `/api/` and `/api-docs/` to the web-api on port 3000, so the app and the API share one
+https origin. [hts/README.md](./hts/README.md) covers the architecture and the npm scripts.
 
-Every step that touches the pi is done by hand: copy files with `scp`, then `ssh alpha@rpi20w.local`
-and run the commands there. Nothing in the repo connects to the pi for you.
+Every step that touches the pi is done by hand: `ssh alpha@rpi20w.local` and run the scripts there.
+Nothing in the repo connects to the pi for you.
 
 #### One-time setup
 
@@ -241,44 +233,24 @@ and run the commands there. Nothing in the repo connects to the pi for you.
    scp hts.crt hts.key alpha@rpi20w.local:
    ```
 
-1. **ssh into the pi** and do the rest there:
+1. **Run `setup-pi.sh` on the pi**, as in [Setting up the pi](#setting-up-the-pi). It moves the
+   certificate into `/etc/ssl/hts`, installs the hts site into nginx, creates
+   `/var/www/hts/releases` owned by `alpha`, and installs the newest release. Re-running it after a
+   `git pull` that changes `hts/deploy/nginx-hts.conf` is how a changed site reaches the pi.
 
-   ```sh
-   ssh alpha@rpi20w.local
-   ```
+> Keep `hts.key` out of the pi image. The image is published as a public GitHub release, so a key
+> baked into it would let anyone pose as `rpi20w.local` to the devices that trust mkcert's CA.
 
-1. **Move the certificate into place:**
+> mkcert's certificates last a little over two years, and the status page warns 30 days before
+> expiry. To renew, make a new pair, copy it to the pi and re-run `setup-pi.sh`.
 
-   ```sh
-   sudo mkdir -p /etc/ssl/hts
-   sudo mv ~/hts.crt ~/hts.key /etc/ssl/hts/
-   sudo chmod 600 /etc/ssl/hts/hts.key
-   ```
-
-1. **Install the site**, from the clone made in [Setting up the pi](#setting-up-the-pi):
-
-   ```sh
-   cd ~/humidity-temperature-sensor
-   git pull
-   cd hts/deploy
-   ./setup-pi-hosting.sh
-   ```
-
-   nginx comes with the [pi image](./image/README.md), already without its default site, which
-   would clash with the hts site on port 80. The script adds the hts site, creates
-   `/var/www/hts/releases` owned by `alpha`, and runs [`pi-status`](#when-the-pi-shows-a-status-page)
-   to choose what nginx serves. Until the first release is deployed that is a status page saying
-   so, at <http://rpi20w.local/>. It is safe to re-run, and re-running it after a `git pull` that
-   changes `hts/deploy/nginx-hts.conf` is how a changed site reaches the pi.
-
-   > On a pi flashed before nginx was added to the image, the script stops and says so. Reflash, or
-   > run `sudo apt-get install -y nginx && sudo rm -f /etc/nginx/sites-enabled/default` first.
-
-1. `exit` the pi
+> On a pi flashed before nginx was added to the image, `setup-pi-hosting.sh` stops and says so.
+> Reflash, or run `sudo apt-get install -y nginx && sudo rm -f /etc/nginx/sites-enabled/default`
+> first.
 
 #### Building
 
-In the dev container:
+In the dev container, to try a build before releasing it:
 
 ```sh
 cd hts
@@ -311,69 +283,34 @@ phone or laptop is running, and it names the release directory on the pi.
    git push origin main "hts-v$VERSION"
    ```
 
-1. build it, as in [Building](#building), so `dist/` matches the release commit
-1. package the build:
-
-   ```sh
-   tar -czf "hts-$VERSION.tgz" -C dist .
-   ```
+1. wait for the **hts Release** workflow the tag starts. It checks the tag matches
+   `hts/package.json`, runs the unit tests and lint, builds, and attaches `hts-$VERSION.tgz` to the
+   `hts-v$VERSION` release. It does not mark the release latest; that stays the newest pi image,
+   whose Imager manifest [Installing the OS](#installing-the-os) points at.
 
 #### Publishing
 
-1. **Copy the package to the pi**, from `hts/` in the dev container:
-
-   ```sh
-   scp "hts-$VERSION.tgz" alpha@rpi20w.local:
-   ```
-
-   If `rpi20w.local` does not resolve, use the pi's address instead, such as
-   `alpha@192.168.4.35:`.
-
-1. **ssh into the pi:**
+1. **ssh into the pi** and install the newest release:
 
    ```sh
    ssh alpha@rpi20w.local
+   cd ~/humidity-temperature-sensor
+   hts/deploy/install-hts.sh
    ```
 
-1. **Unpack it as a new release.** Set `VERSION` to the version you just released:
+   It fetches the tags, downloads the build of the newest `hts-v*` one, and unpacks it into
+   `/var/www/hts/releases/<version>`. It then moves the `current` symlink onto it in one step, so
+   nginx never serves half of one release and half of another, and runs `sudo pi-status`, which
+   should print `pi-status: serving hts.` Last, it removes old releases, keeping the live one and
+   the two newest others to roll back to.
 
-   ```sh
-   VERSION=0.1.1
-   RELEASE=/var/www/hts/releases/$VERSION
-   mkdir "$RELEASE"
-   tar -xzf ~/hts-$VERSION.tgz -C "$RELEASE"
-   rm ~/hts-$VERSION.tgz
-   ```
+   `install-hts.sh 0.1.1` installs that version instead. `install-hts.sh ~/hts-0.1.1.tgz` installs a
+   build already on the pi, such as one packaged in the dev container with
+   `tar -czf "hts-$VERSION.tgz" -C dist .` and copied over with `scp`. If `rpi20w.local` does not
+   resolve from the container, use the pi's address, such as `alpha@192.168.4.35:`.
 
-   `mkdir` fails if that version is already on the pi. That is deliberate: bump the version
-   instead of overwriting a release that may be live.
-
-1. **Switch to it:**
-
-   ```sh
-   ln -sfn "$RELEASE" /var/www/hts/current.tmp
-   mv -T /var/www/hts/current.tmp /var/www/hts/current
-   ls -l /var/www/hts/current
-   ```
-
-   The `mv` replaces the `current` symlink in one step, so nginx never serves half of one release
-   and half of another.
-
-1. **Check it can be served:**
-
-   ```sh
-   sudo pi-status
-   ```
-
-   It should print `pi-status: serving hts.` On the first deploy this is what switches nginx from
-   the status page to hts. After that it only re-checks, and the reload it does is harmless.
-
-1. **Clear out old releases**, keeping the last two or three to roll back to:
-
-   ```sh
-   ls /var/www/hts/releases
-   rm -rf /var/www/hts/releases/<old version>
-   ```
+   It refuses a version that is already installed. That is deliberate: bump the version instead of
+   overwriting a release that may be live.
 
 1. `exit` the pi, open <https://rpi20w.local/> and check the footer shows the new version. Copies of
    the app that are already installed or open show "A new version is available." within an hour,

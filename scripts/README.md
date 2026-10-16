@@ -3,7 +3,8 @@
 Pi-side tooling. These scripts are not part of the `web-api` package and are not
 included in `npm run package`.
 
-- `setup-pi.sh` — takes a freshly flashed image to a working capture setup.
+- `setup-pi.sh` — takes a freshly flashed image to a working capture setup, then on to running
+  the web-api and serving hts (see "Setting up the pi" in the root README).
 - `capture-sensor.mjs` — drives the sensor and records the raw edge stream.
 
 The GPIO work itself lives in the [`dht22-capture`](../dht22-capture/) package:

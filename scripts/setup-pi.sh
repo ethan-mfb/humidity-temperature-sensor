@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 #
-# Pi-side setup for the DHT22 capture tooling.
+# Pi-side setup: takes a freshly flashed pi image to serving hts.
 #
-# Takes a freshly flashed Raspberry Pi OS Lite image to the point where
-# capture-sensor.mjs can run: toolchain, libgpiod, node, the compiled helper,
-# and the access checks from the root README.
+# Installs node, builds the capture helper and checks GPIO access, then builds
+# the web-api from this clone and runs it as the web-api systemd service. It
+# installs the hts certificate if ~/hts.crt and ~/hts.key are there, sets up
+# nginx with hts/deploy/setup-pi-hosting.sh, and installs the newest hts
+# release if none is live yet.
 #
-# Idempotent — safe to re-run. Run it on the pi, not in the dev container.
+# Idempotent — safe to re-run, and re-running after a git pull is how a new
+# web-api reaches the pi. Run it on the pi, not in the dev container.
 #
 # Usage: ./setup-pi.sh [--skip-node]
 
@@ -16,6 +19,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # The helper and its node wrapper live in the dht22-capture package, which both
 # this tooling and the web-api depend on.
 PACKAGE_DIR="$(cd "${SCRIPT_DIR}/../dht22-capture" && pwd)"
+WEB_API_DIR="$(cd "${SCRIPT_DIR}/../web-api" && pwd)"
+DEPLOY_DIR="$(cd "${SCRIPT_DIR}/../hts/deploy" && pwd)"
+
+# nginx proxies /api/ to it; see hts/deploy/nginx-hts.conf.
+WEB_API_PORT=3000
+WEB_API_UNIT="/etc/systemd/system/web-api.service"
+
+# Where mkcert's pair is copied to (README, "Publishing the hts PWA"), and
+# where nginx and pi-status expect it.
+CERT_NAME="hts"
+CERT_DIR="/etc/ssl/hts"
+HTS_CURRENT="/var/www/hts/current"
 HELPER_NAME="gpiod-capture"
 HELPER_PATH="${PACKAGE_DIR}/bin/${HELPER_NAME}"
 
@@ -36,7 +51,7 @@ SKIP_NODE=0
 for arg in "$@"; do
   case "$arg" in
     --skip-node) SKIP_NODE=1 ;;
-    -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -126,6 +141,70 @@ else
   printf '%s\n' "$helper_output" | sed 's/^/      /'
 fi
 
+say "Building the web-api"
+cd "$WEB_API_DIR"
+npm ci
+npm run build
+ok "built ${WEB_API_DIR}/dist"
+
+say "Running the web-api as a service"
+node_path="$(command -v node || true)"
+if [ -z "$node_path" ]; then
+  warn "node is not installed, so the service was not set up. Re-run without --skip-node."
+else
+  # systemd does not load nvm, hence the absolute node path. It changes with
+  # every nvm install, so the unit is rewritten on every run.
+  sudo tee "$WEB_API_UNIT" > /dev/null <<UNIT
+[Unit]
+Description=humidity-temperature-sensor web-api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$(id -un)
+WorkingDirectory=${WEB_API_DIR}
+ExecStart=${node_path} dist/index.js
+Environment=NODE_ENV=production
+Environment=PORT=${WEB_API_PORT}
+NoNewPrivileges=true
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  sudo systemctl daemon-reload
+  sudo systemctl enable web-api
+  sudo systemctl restart web-api
+  ok "web-api runs ${WEB_API_DIR}/dist/index.js on port ${WEB_API_PORT}"
+fi
+
+say "Installing the hts certificate"
+if [ -f "$HOME/${CERT_NAME}.crt" ] && [ -f "$HOME/${CERT_NAME}.key" ]; then
+  sudo install -D -m 644 "$HOME/${CERT_NAME}.crt" "${CERT_DIR}/${CERT_NAME}.crt"
+  sudo install -D -m 600 "$HOME/${CERT_NAME}.key" "${CERT_DIR}/${CERT_NAME}.key"
+  rm "$HOME/${CERT_NAME}.crt" "$HOME/${CERT_NAME}.key"
+  ok "moved ~/${CERT_NAME}.crt and ~/${CERT_NAME}.key into ${CERT_DIR}"
+elif sudo test -f "${CERT_DIR}/${CERT_NAME}.crt"; then
+  ok "already installed in ${CERT_DIR}"
+else
+  warn "no certificate in ${CERT_DIR} or ~. Until there is one, nginx serves a status page."
+  warn "make it with mkcert, scp it here and re-run. See \"Publishing the hts PWA\" in the README."
+fi
+
+say "Setting up nginx for hts"
+"$DEPLOY_DIR/setup-pi-hosting.sh"
+
+say "Installing hts"
+if [ -e "$HTS_CURRENT" ]; then
+  ok "hts $(basename "$(readlink "$HTS_CURRENT")") is live. For a newer one: ${DEPLOY_DIR}/install-hts.sh"
+elif "$DEPLOY_DIR/install-hts.sh"; then
+  ok "installed the newest hts release"
+else
+  warn "could not install hts; nginx serves a status page until it is. See the output above."
+fi
+
 say "Setup complete"
 
 # nvm appends its source line to ~/.bashrc, which the calling shell read before
@@ -142,6 +221,8 @@ EOF
 fi
 
 cat <<EOF
+  hts:       https://$(hostname).local/ (http:// shows what is missing, if anything)
+  web-api:   http://$(hostname).local:${WEB_API_PORT}/
   Capture:   cd ${SCRIPT_DIR} && node capture-sensor.mjs --samples 30 --out baseline.jsonl
   Node path: $(command -v node || echo '(node not installed)')
 
