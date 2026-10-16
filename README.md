@@ -5,7 +5,7 @@ A raspberry pi 0 2 w humidity and temperature sensor
 - Raspberry Pi 0 2 W
 - HiLetgo DHT22/AM23 (ASAIR AM2302)
 - [Raspberry Pi Tutorial: How to Use the DHT-22](https://www.instructables.com/Raspberry-Pi-Tutorial-How-to-Use-the-DHT-22/)
-- [onoff](https://github.com/fivdi/onoff)
+- [libgpiod](https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/about/)
 
 ## dev environment
 
@@ -59,7 +59,7 @@ References
    cd humidity-temperature-sensor/scripts
    ```
 
-1. run `./setup-pi.sh`. It installs node 16 through nvm, checks GPIO access, builds the capture
+1. run `./setup-pi.sh`. It installs node 20 through nvm, checks GPIO access, builds the capture
    helper and captures one frame as a smoke test. It is safe to re-run.
 1. open a new shell, run `which node` and note the path. The service unit below needs it.
 
@@ -68,70 +68,46 @@ References
 > the container — there is nothing on the host to copy from, and the container cannot resolve
 > `rpi20w.local` anyway.
 
-> Node 16, because onoff only supports v16. It is the one dependency not baked into the image:
-> nvm installs into the home directory of `alpha`, who does not exist until Imager's settings create
-> the user at first boot.
+> Node is the one dependency not baked into the image: nvm installs into the home directory of
+> `alpha`, who does not exist until Imager's settings create the user at first boot.
 
 > `setup-pi.sh` also runs `apt update` and `apt full-upgrade`, and its apt install finds every
-> package already present. onoff depends on epoll, a native addon that node-gyp builds on the pi
-> during `npm install`, which is why the image carries build-essential and python3.
+> package already present. The image carries build-essential and libgpiod-dev because the capture
+> helper, which the web-api reads the sensor through, is C compiled on the pi.
 
 ### Verifying GPIO access
 
-onoff reaches the pins through the sysfs interface (`/sys/class/gpio`), which the kernel has
-deprecated in favour of the gpiochip character device. Confirm it still exists on the image you
-flashed before publishing anything, because onoff cannot work without it.
-
-> **Unresolved on trixie.** Current imager builds are Raspberry Pi OS trixie, which is newer than
-> the image these steps were written against. Two things changed there: `pigpio` was dropped from
-> the archive entirely, and sysfs GPIO is a kernel config away from disappearing. Run the checks
-> below on your own image before trusting any of it. If `/sys/class/gpio` is gone, onoff is a dead
-> end and the `web-api` needs to move to the character device — `scripts/` has already made that
-> move, see [scripts/README.md](./scripts/README.md#why-there-is-a-c-helper). That migration is
-> deliberately not done yet; capture data first, then decide.
+Both the web-api and the capture tooling reach the pins through the gpiochip character device
+(`/dev/gpiochip*`) with libgpiod v2, via the C helper in [`dht22-capture`](./dht22-capture/). The
+legacy sysfs interface (`/sys/class/gpio`) is not used. Confirm the device is reachable before
+publishing anything. `setup-pi.sh` runs the same checks.
 
 1. `ssh alpha@rpi20w.local`
 1. run `groups` and confirm `gpio` is listed, so the api does not need root
-1. run `ls /sys/class/gpio` and confirm `export` and `unexport` are present
-1. identify the header chip and read its base
+1. identify the header chip, with no `sudo`
 
    ```sh
-   ls /sys/class/gpio                      # chip0  export  gpiochip512  unexport
-   cat /sys/class/gpio/gpiochip512/label   # pinctrl-bcm2835
-   cat /sys/class/gpio/gpiochip512/base    # 512
-   cat /sys/class/gpio/gpiochip512/ngpio   # 54
+   gpiodetect          # a chip labelled pinctrl-bcm2835 (54 lines)
+   gpioinfo | head
    ```
 
-1. export a pin using its kernel number, base + BCM, with no `sudo`
+> No `sudo` on purpose. The api runs unprivileged as `alpha` under systemd, so unprivileged access
+> is the access that actually has to work.
 
-   ```sh
-   echo 516 > /sys/class/gpio/export
-   cat /sys/class/gpio/gpio516/direction   # in
-   echo 516 > /sys/class/gpio/unexport
-   ```
-
-> sysfs numbers are kernel global, not BCM numbers, so `echo 4` fails with `Invalid argument` here.
-> See [GPIO numbering](#gpio-numbering) for the arithmetic and the values measured on this device.
-
-> No `sudo` in that second block on purpose. The api runs unprivileged as `alpha` under systemd, so
-> unprivileged export is the access that actually has to work.
-
-> If `/sys/class/gpio` is missing then the kernel dropped sysfs GPIO and onoff is a dead end on
-> that image, desktop or Lite. The replacement is libgpiod — but not, as this note used to claim,
-> via node-libgpiod or opengpio. Both were checked against this sensor and neither can carry a DHT22
-> frame: node-libgpiod builds against the v1 API that trixie no longer ships, and opengpio discards
-> the kernel edge timestamp. See
-> [scripts/README.md](./scripts/README.md#why-there-is-a-c-helper) for the details and the working
-> approach.
+> If the kernel `dht11` driver is loaded it holds the data line and the helper exits with `EBUSY`.
+> Remove `dtoverlay=dht11` from `/boot/firmware/config.txt` and reboot.
 
 > The `gpio` group membership comes from udev rules in `raspberrypi-sys-mods`, which Lite has. The
 > service unit below runs as `User=alpha` and systemd grants supplementary groups by default, so
 > the service inherits it. A dedicated system user would have to be added to the group explicitly.
 
+See [scripts/README.md](./scripts/README.md#why-there-is-a-c-helper) for why the timing-critical
+part is a C helper rather than a node GPIO library.
+
 References
 
-- <https://www.kernel.org/doc/html/latest/admin-guide/gpio/sysfs.html>
-- <https://github.com/fivdi/onoff#allowing-access-to-gpio-without-root-privileges>
+- <https://www.kernel.org/doc/html/latest/userspace-api/gpio/chardev.html>
+- <https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/about/>
 
 ### Publishing the web-api
 
@@ -145,9 +121,6 @@ References
 1. `npm install --omit=dev`
 1. `node index.js` to smoke test it
 1. navigate to `http://rpi20w.local:3000/`, then stop it with `ctrl+c`
-
-> `npm install --omit=dev` compiles the epoll native addon on the pi, so it needs the build tools
-> from the image. Node 16 headers against a current gcc is the usual reason this step fails.
 
 ### Publishing the capture tooling
 
@@ -194,8 +167,8 @@ reboots and restarts it if it crashes.
    Type=simple
    User=alpha
    WorkingDirectory=/home/alpha/web-api
-   # absolute path, systemd does not load nvm; use the output of `which node`
-   ExecStart=/home/alpha/.nvm/versions/node/v16.20.2/bin/node index.js
+   # absolute path, systemd does not load nvm; replace with the output of `which node`
+   ExecStart=/home/alpha/.nvm/versions/node/v20.x.x/bin/node index.js
    Environment=NODE_ENV=production
    Environment=PORT=3000
    NoNewPrivileges=true
@@ -221,7 +194,7 @@ Day to day
 - `sudo systemctl restart web-api` after publishing a new build
 - `journalctl -u web-api -f` to follow the logs
 
-> The nvm path changes with every `nvm install`. If that gets annoying, install node 16 from
+> The nvm path changes with every `nvm install`. If that gets annoying, install node 20 from
 > NodeSource so it lands at `/usr/bin/node` and keep nvm for the dev container only.
 
 > The `start` and `stop` endpoints drive the GPIO pin and have no authentication, so keep the
@@ -448,42 +421,23 @@ Day to day, on the pi
 
 ### GPIO numbering
 
-The sysfs interface numbers pins globally across every gpiochip in the kernel, not by BCM number.
-Older kernels gave the pi's pinctrl chip a fixed base of 0, which made the two numbering schemes
-line up by accident. Current kernels allocate chip bases dynamically from `GPIO_DYNAMIC_BASE`
-(512), so they no longer match.
-
-```text
-kernel gpio number = chip base + BCM number
-516                = 512       + 4
-```
+On the gpiochip character device, line offsets **are** BCM numbers. The sensor's data wire is on
+physical pin 3, which is BCM 2, which is line 2 of the header chip. The helper finds that chip by
+its label rather than by `/dev/gpiochipN`, because chip numbering is not stable across kernels and
+boards.
 
 Measured on this device, a Pi Zero 2 W running Raspberry Pi OS Lite (64-bit):
 
-|       |                               |
-| ----- | ----------------------------- |
-| chip  | `/sys/class/gpio/gpiochip512` |
-| label | `pinctrl-bcm2835`             |
-| base  | 512                           |
-| ngpio | 54                            |
-| BCM 4 | sysfs 516                     |
+|                  |                   |
+| ---------------- | ----------------- |
+| label            | `pinctrl-bcm2835` |
+| lines            | 54                |
+| physical pin 3   | BCM 2, line 2     |
 
-> Do not treat 512 as a constant. The base is dynamically allocated and can move across a kernel
-> update or a different board, so read it back from `/sys/class/gpio/gpiochip*/base`. The directory
-> is named after its own base, so `ls /sys/class/gpio` already shows it.
-
-> `ls /sys/class/gpio` also lists a `chip0` entry. It does not follow the `gpiochip<base>` naming
-> the sysfs interface documents, and nothing here depends on it.
-
-> Known gap: onoff passes its pin argument straight through to sysfs, so `new Gpio(4, ...)` in
-> `gpioPinPollingService` fails with `EINVAL` on this kernel. The base offset is not applied
-> anywhere in the code yet.
-
-> This whole section is sysfs-only arithmetic. On the gpiochip character device, line offsets **are**
-> BCM numbers — `--pin 2` means BCM 2 — so moving `gpioPinPollingService` to libgpiod deletes the
-> problem rather than fixing it. `dht22-capture/src/gpiod-capture.c` already works this way. Two further
-> consequences worth weighing when that migration is scheduled: it would drop the `onoff` dependency,
-> and onoff is the only reason this project is pinned to Node v16.
+> Only the legacy sysfs interface numbers differently. It numbers pins globally, as the chip's base
+> plus the BCM number, and current kernels allocate that base dynamically from 512, so BCM 4 is
+> sysfs 516. Nothing in this repo uses sysfs; that arithmetic matters only when poking
+> `/sys/class/gpio` by hand.
 
 ## sensor spec
 
