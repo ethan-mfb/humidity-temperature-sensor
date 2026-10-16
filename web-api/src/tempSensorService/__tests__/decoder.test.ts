@@ -16,6 +16,7 @@ import {
   byteToBits,
   computeChecksum,
   createFramePulses,
+  createLateArmedFramePulses,
   createPulse,
   withChecksum,
 } from "./utils.js";
@@ -67,6 +68,36 @@ describe("decodeBitsFromFramePulses", () => {
     expect(result).toEqual(roomConditionsBytes.flatMap(byteToBits));
   });
 
+  it("decodes all 40 bits of a frame that lost its response pair", () => {
+    const result = decodeBitsFromFramePulses(
+      createLateArmedFramePulses(roomConditionsBytes, 0),
+    );
+
+    expect(result).toEqual(roomConditionsBytes.flatMap(byteToBits));
+  });
+
+  it.each([1, 3, 6])(
+    "fills %i lost leading bits back in as zeros",
+    (lostLeadingBits) => {
+      const result = decodeBitsFromFramePulses(
+        createLateArmedFramePulses(roomConditionsBytes, lostLeadingBits),
+      );
+
+      expect(result).toEqual(roomConditionsBytes.flatMap(byteToBits));
+    },
+  );
+
+  it("returns a signal error when more leading bits are lost than are always zero", () => {
+    const result = decodeBitsFromFramePulses(
+      createLateArmedFramePulses(roomConditionsBytes, 7),
+    );
+
+    expect(result).toEqual({
+      type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
+      message: expect.stringContaining("7 leading bits lost"),
+    });
+  });
+
   it("returns a signal error when the frame is truncated", () => {
     const pulses = createFramePulses(roomConditionsBytes).slice(0, 40);
 
@@ -74,7 +105,22 @@ describe("decodeBitsFromFramePulses", () => {
 
     expect(result).toEqual({
       type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
-      message: expect.stringContaining("Expected 40 data bits"),
+      message: expect.stringContaining("leading bits lost"),
+    });
+  });
+
+  it("returns a signal error when the frame carries more than 40 bits", () => {
+    const pulses = [
+      ...createFramePulses(roomConditionsBytes),
+      createPulse(GPIO_LEVELS.LOW, TEST_PULSE_WIDTHS_US.BIT_LOW),
+      createPulse(GPIO_LEVELS.HIGH, TEST_PULSE_WIDTHS_US.ZERO_HIGH),
+    ];
+
+    const result = decodeBitsFromFramePulses(pulses);
+
+    expect(result).toEqual({
+      type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
+      message: expect.stringContaining("1 bit(s) too many"),
     });
   });
 
@@ -196,6 +242,17 @@ describe("decodeReadingFromBytes", () => {
 describe("decodeFrame", () => {
   it("decodes a well formed frame into a reading", () => {
     const result = decodeFrame(createFramePulses(roomConditionsBytes));
+
+    expect(result).toMatchObject({
+      temperatureC: 23.4,
+      relativeHumidityPercentage: 65.2,
+    });
+  });
+
+  it("decodes a frame that lost its response pair and leading bits", () => {
+    const result = decodeFrame(
+      createLateArmedFramePulses(roomConditionsBytes, 4),
+    );
 
     expect(result).toMatchObject({
       temperatureC: 23.4,

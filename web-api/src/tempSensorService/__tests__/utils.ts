@@ -46,12 +46,9 @@ export function withChecksum(dataBytes: readonly number[]): readonly number[] {
   return [...dataBytes, computeChecksum(dataBytes)];
 }
 
-/**
- * Builds the pulse train for a frame carrying the given bytes: the sensor
- * response pair followed by one low/high pair per data bit.
- */
-export function createFramePulses(bytes: readonly number[]): readonly Pulse[] {
-  const bitPulses = bytes
+/** One low/high pair per data bit, as the sensor transmits them. */
+function createDataBitPulses(bytes: readonly number[]): readonly Pulse[] {
+  return bytes
     .flatMap(byteToBits)
     .flatMap((bit) => [
       createPulse(GPIO_LEVELS.LOW, TEST_PULSE_WIDTHS_US.BIT_LOW),
@@ -62,12 +59,31 @@ export function createFramePulses(bytes: readonly number[]): readonly Pulse[] {
           : TEST_PULSE_WIDTHS_US.ZERO_HIGH,
       ),
     ]);
+}
 
+/**
+ * Builds the pulse train for a frame carrying the given bytes: the sensor
+ * response pair followed by one low/high pair per data bit.
+ */
+export function createFramePulses(bytes: readonly number[]): readonly Pulse[] {
   return [
     createPulse(GPIO_LEVELS.LOW, TEST_PULSE_WIDTHS_US.RESPONSE_LOW),
     createPulse(GPIO_LEVELS.HIGH, TEST_PULSE_WIDTHS_US.RESPONSE_HIGH),
-    ...bitPulses,
+    ...createDataBitPulses(bytes),
   ];
+}
+
+/**
+ * Builds the pulse train a pi actually delivers: edge detection is armed late,
+ * so the response pair and the first few data bits never arrive.
+ */
+export function createLateArmedFramePulses(
+  bytes: readonly number[],
+  lostLeadingBits: number,
+): readonly Pulse[] {
+  const pulsesPerBit = 2;
+
+  return createDataBitPulses(bytes).slice(lostLeadingBits * pulsesPerBit);
 }
 
 /**

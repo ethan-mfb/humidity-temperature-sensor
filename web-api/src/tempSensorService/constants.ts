@@ -5,7 +5,9 @@ export const targetDataGpioPin = 3;
  * Structure of a single AM2302 (DHT22) transmission frame.
  *
  * The sensor acknowledges the host start signal with one response pulse pair
- * and then transmits 40 data bits, most significant bit first.
+ * and then transmits 40 data bits, most significant bit first. On the pi, edge
+ * detection is armed by the same libgpiod call that releases the line, so the
+ * response pair and the first few data bits routinely arrive before it is live.
  */
 export const FRAME = {
   /** Data bits transmitted in a single frame. */
@@ -14,8 +16,14 @@ export const FRAME = {
   BITS_PER_BYTE: 8,
   /** Bytes decoded from a complete frame. */
   DATA_BYTE_COUNT: 5,
-  /** High pulses the sensor sends to acknowledge the start signal. */
-  SENSOR_RESPONSE_HIGH_PULSE_COUNT: 1,
+  /**
+   * Relative humidity tops out at 100% (0x03E8), so the humidity high byte is
+   * never above 0x03 and a frame's first 6 bits are always zero. That is the
+   * entire licence for filling lost leading bits back in; past it, guessing.
+   */
+  RECOVERABLE_LEADING_BITS: 6,
+  /** The response pair leads the frame; this far in it would be a data bit. */
+  SENSOR_RESPONSE_SEARCH_PULSES: 4,
 } as const;
 
 /** Position of each decoded byte within a complete frame. */
@@ -39,6 +47,15 @@ export const PULSE_WIDTHS_US = {
   MAX_DATA_BIT_HIGH: 120,
   /** High pulses at or above this width encode a one, below it a zero. */
   BIT_VALUE_THRESHOLD: 50,
+  /** The sensor answers the start signal with an 80us low, then an 80us high. */
+  SENSOR_RESPONSE: 80,
+  /**
+   * An 80us response high and a ~70us one bit are too close to tell apart by
+   * width, but the low before them is not: 80us for the response, 50us for a
+   * data bit. The pair is what gets matched, so this only has to separate 80
+   * from 50.
+   */
+  SENSOR_RESPONSE_TOLERANCE: 20,
   /** An idle gap at least this long separates one frame from the next. */
   FRAME_GAP_THRESHOLD: 1000,
 } as const;

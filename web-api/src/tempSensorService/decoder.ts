@@ -54,20 +54,68 @@ export function decodeBitFromPulse(pulse: Pulse): Bit | TempSensorError {
   return durationUs >= PULSE_WIDTHS_US.BIT_VALUE_THRESHOLD ? 1 : 0;
 }
 
+function isHigh(pulse: Pulse): boolean {
+  return unwrapGpioValue(pulse.value) === GPIO_LEVELS.HIGH;
+}
+
+function isSensorResponseWidth(pulse: Pulse): boolean {
+  return (
+    Math.abs(
+      unwrapMicroseconds(pulse.durationUs) - PULSE_WIDTHS_US.SENSOR_RESPONSE,
+    ) <= PULSE_WIDTHS_US.SENSOR_RESPONSE_TOLERANCE
+  );
+}
+
 /**
- * Extracts the data bits from a frame's pulses. Only high pulses carry data,
- * and the first of them is the sensor's response to the start signal.
+ * Drops the sensor's response pair, an 80us low then an 80us high, and
+ * anything before it. The response high is wide enough to read as a one bit,
+ * so a frame that kept its handshake would otherwise decode one bit long. A
+ * frame that lost it is returned unchanged.
+ */
+export function stripSensorResponse(
+  pulses: readonly Pulse[],
+): readonly Pulse[] {
+  const responseIndex = pulses
+    .slice(0, FRAME.SENSOR_RESPONSE_SEARCH_PULSES)
+    .findIndex(
+      (pulse, index) =>
+        !isHigh(pulse) &&
+        isSensorResponseWidth(pulse) &&
+        pulses[index + 1] !== undefined &&
+        isHigh(pulses[index + 1]) &&
+        isSensorResponseWidth(pulses[index + 1]),
+    );
+  const responsePulseCount = 2;
+
+  return responseIndex === -1
+    ? pulses
+    : pulses.slice(responseIndex + responsePulseCount);
+}
+
+/**
+ * Extracts the data bits from a frame's pulses. Only high pulses carry data.
+ *
+ * Leading bits lost to late edge detection are filled back in as zeros, which
+ * is only sound because the first {@link FRAME.RECOVERABLE_LEADING_BITS} bits
+ * of any reading the sensor can produce are zero.
  */
 export function decodeBitsFromFramePulses(
   pulses: readonly Pulse[],
 ): readonly Bit[] | TempSensorError {
-  const dataPulses = pulses
-    .filter((pulse) => unwrapGpioValue(pulse.value) === GPIO_LEVELS.HIGH)
-    .slice(FRAME.SENSOR_RESPONSE_HIGH_PULSE_COUNT);
+  const dataPulses = stripSensorResponse(pulses).filter(isHigh);
+  const lostLeadingBits = FRAME.DATA_BIT_COUNT - dataPulses.length;
 
-  if (dataPulses.length !== FRAME.DATA_BIT_COUNT) {
+  if (lostLeadingBits < 0) {
     return signalError(
-      `Expected ${FRAME.DATA_BIT_COUNT} data bits but found ${dataPulses.length}`,
+      `Expected ${FRAME.DATA_BIT_COUNT} data bits but found ` +
+        `${dataPulses.length}, ${-lostLeadingBits} bit(s) too many`,
+    );
+  }
+
+  if (lostLeadingBits > FRAME.RECOVERABLE_LEADING_BITS) {
+    return signalError(
+      `${lostLeadingBits} leading bits lost, only ` +
+        `${FRAME.RECOVERABLE_LEADING_BITS} are recoverable`,
     );
   }
 
@@ -78,7 +126,12 @@ export function decodeBitsFromFramePulses(
     return firstError;
   }
 
-  return results.filter((result): result is Bit => !isTempSensorError(result));
+  const leadingZeros = Array.from({ length: lostLeadingBits }, (): Bit => 0);
+
+  return [
+    ...leadingZeros,
+    ...results.filter((result): result is Bit => !isTempSensorError(result)),
+  ];
 }
 
 /** Packs bits into bytes, most significant bit first. */
