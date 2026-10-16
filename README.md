@@ -28,9 +28,11 @@ both, for the package list, and for when to bump the version.
 ### Installing the OS
 
 1. download and install [imager](https://www.raspberrypi.com/software/)
-1. choose `Raspberry Pi Zero 2 W` as the device
-1. for the OS, scroll to `Use custom` and select the `.img.xz` from `image/out/`, or the one
-   downloaded from the workflow run
+1. take the `.img.xz` from `image/out/`, or the one downloaded from the workflow run, and run
+   `image/imager-manifest.sh <the .img.xz>` on the machine Imager runs on. Imager 2 offers no
+   settings for a `Use custom` image; see "Flashing" in `image/README.md`
+1. double-click the `.rpi-imager-manifest` it writes to open it in Imager
+1. choose `Raspberry Pi Zero 2 W` as the device and `Humidity temperature sensor` as the OS
 1. click edit settings
    1. set hostname: `rpi20w`
    1. username: `alpha`
@@ -40,9 +42,9 @@ both, for the package list, and for when to bump the version.
    1. enable the SSH service: `rpi20w.local`
       1. use password authentication
 
-> Imager normally decides how to apply these settings from its own OS list, which a `Use custom`
-> file is not in. If `ssh alpha@rpi20w.local` does not connect after the first boot, check whether
-> the settings were applied before you debug the network.
+> Imager applies these settings the way the manifest's `init_format` says (`cloudinit-rpi` for
+> trixie). If `ssh alpha@rpi20w.local` does not connect after the first boot, check whether the
+> settings were applied before you debug the network.
 
 References
 

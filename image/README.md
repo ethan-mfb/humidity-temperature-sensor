@@ -1,13 +1,15 @@
 # Custom Pi image
 
 Builds a Raspberry Pi OS Lite (64-bit) image with the packages in
-`packages.txt` already installed, for flashing with Raspberry Pi Imager's
-**Use custom** option.
+`packages.txt` already installed, for flashing with Raspberry Pi Imager
+through a manifest that lets Imager customize it (see [Flashing](#flashing)).
 
 - `build.sh`: runs the build in a privileged arm64 docker container. Start here.
 - `build-image.sh`: the build itself. Needs root and loop devices.
 - `VERSION`: the image's version. See [Versioning](#versioning).
 - `base-image.env`: the pinned Raspberry Pi OS release the image starts from.
+- `imager-manifest.sh`: writes the manifest Imager needs to offer OS
+  customization for the image. See [Flashing](#flashing).
 - `packages.txt`: what gets installed, one package per line.
 - `Dockerfile`: the build environment `build.sh` uses.
 - `pi-status/`: the boot check that picks what nginx serves, and its installer.
@@ -73,16 +75,36 @@ the image's sha256.
 
 ## Flashing
 
+Imager 2 greys out OS customization for an image picked with **Use custom**:
+it only customizes images it finds in an OS list, which says how (the
+`init_format`). So the image is opened through a manifest instead, a one-entry
+OS list that points at it.
+
 1. download and install [imager](https://www.raspberrypi.com/software/)
-1. choose the device, then for the OS scroll to **Use custom** and select the
-   `.img.xz`. You don't need to decompress it first.
+1. on the machine Imager runs on, with the `.img.xz` where it will stay (the
+   manifest points at it by absolute path), run:
+
+   ```bash
+   image/imager-manifest.sh path/to/humidity-temp-sensor-v<VERSION>.img.xz
+   ```
+
+   It writes `humidity-temp-sensor-v<VERSION>.img.xz.rpi-imager-manifest` next
+   to the image.
+1. double-click the manifest to open it in Imager, or open Imager with
+   `rpi-imager path/to/the.rpi-imager-manifest`, or pick it under **App
+   Options** > **Content Repository** > **EDIT** > **Use custom file**. The OS
+   list then shows only this image.
+1. choose the Raspberry Pi Zero 2 W and the **Humidity temperature sensor**
+   OS. You don't need to decompress the image first.
 1. apply the same OS customization settings as in the root README's
    [Installing the OS](../README.md#installing-the-os)
 
-> Imager reads `init_format` from its own OS list to decide how to apply OS
-> customization. A local file has no list entry, so check that the hostname,
-> user, WLAN and SSH settings actually take effect on the first flash. The base
-> image is trixie, which applies them through cloud-init.
+The manifest takes the `init_format` from `BASE_IMAGE_INIT_FORMAT` in
+`base-image.env`. trixie's is `cloudinit-rpi`. Imager 1.x applied
+customization to any custom image without knowing the format; 2.0 stopped
+because applying the wrong one breaks the first boot. If **Content Repository**
+was set to the manifest, set it back to the default to see the official OS list
+again.
 
 ## What is not in the image
 
@@ -106,7 +128,7 @@ what ends up in the image:
 | Base image moves to a new Debian release (e.g. trixie to forky), or a change that means redoing the per-pi setup after flashing | major |
 | Base image moves to a newer release of the same Debian release, a package is added or removed, or the image gains behaviour (e.g. a pi-status check) | minor |
 | A fix to `build-image.sh` or `pi-status/` that changes the image without adding anything | patch |
-| `README.md`, comments, `build.sh`, `Dockerfile`, or anything outside `image/` | none |
+| `README.md`, comments, `build.sh`, `Dockerfile`, `imager-manifest.sh`, or anything outside `image/` | none |
 
 So a rebuild is due when `VERSION` is ahead of the image you last built. To see
 what a pi is running, `cat /etc/humidity-temp-sensor-image` on it.
@@ -125,8 +147,15 @@ build, so two builds of the same `VERSION` can differ in package patch levels.
    echo "$url"; curl -fsSL "$url.sha256"
    ```
 
-1. Put both in `base-image.env`, bump `VERSION` (minor, or major for a new
-   Debian release) and build.
+1. Put both in `base-image.env`, along with the release's `init_format` from
+   Imager's OS list:
+
+   ```bash
+   curl -fsSL https://downloads.raspberrypi.com/os_list_imagingutility_v4.json |
+     jq -r --arg url "$url" '.. | objects | select(.url? == $url) | .init_format'
+   ```
+
+1. Bump `VERSION` (minor, or major for a new Debian release) and build.
 
 ## Adding packages
 

@@ -4,7 +4,8 @@
 #
 # Downloads the official Lite arm64 release pinned in base-image.env, installs
 # everything listed in packages.txt into it through a chroot, and writes
-# humidity-temp-sensor-v<VERSION>.img.xz to out/ for Imager's "Use custom".
+# humidity-temp-sensor-v<VERSION>.img.xz to out/, to flash through the manifest
+# imager-manifest.sh writes for it.
 #
 # --url builds on a different release instead, checked against the checksum
 # published next to it. The version then gets a -unpinned suffix, so a trial
@@ -232,5 +233,6 @@ cat <<EOF
   Image:   ${OUT_FILE}
   sha256:  $(cut -d' ' -f1 "${OUT_FILE}.sha256")
 
-  In Raspberry Pi Imager, choose "Use custom" and select the .img.xz.
+  To flash it, run imager-manifest.sh on the .img.xz where Imager runs and
+  open the manifest it writes in Imager. See "Flashing" in README.md.
 EOF
