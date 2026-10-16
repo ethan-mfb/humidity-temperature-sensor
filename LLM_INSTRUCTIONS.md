@@ -40,6 +40,7 @@
 - `web-api/` - Web API service
   - `src/` - API source code
   - `scripts/` - Utility scripts (e.g., version generation)
+- `image/` - Custom Raspberry Pi OS image build, versioned by `image/VERSION`
 - `hts/` - PWA frontend (React, TypeScript, Sass), hosted on the pi
   - `src/` - App source, by clean architecture layer
   - `e2e/` - Playwright tests
@@ -169,3 +170,23 @@ cheap:
 - Use `npm run test:once` to run tests, if it exists.
 - If it does not exist, suggest creating it to the developer.
 - Do not run `npm run test`; it runs in watch mode and will block you.
+
+### Pi image
+
+`image/VERSION` is the custom pi image's semantic version. Bump it in the same commit as any change
+that alters what ends up in the built image, so the developer can tell from the version alone that a
+rebuild is due:
+
+- `image/packages.txt`, `image/base-image.env`, `image/pi-status/**`, or the parts of
+  `image/build-image.sh` that change the image's contents: bump it.
+  - Major: a new Debian release as the base, or a change that means redoing the per-pi setup.
+  - Minor: a newer base release within the same Debian release, a package added or removed, or
+    new behaviour baked in.
+  - Patch: a fix that changes the image without adding anything.
+- `image/README.md`, comments, `image/build.sh`, `image/Dockerfile`, or anything outside `image/`:
+  do not bump it.
+- Bump at most once per change, even if it spans several commits.
+- Never point `image/base-image.env` at `raspios_lite_arm64_latest`; pin a dated release and its
+  sha256. "Updating the base image" in `image/README.md` has the steps.
+- If a change outside `image/` needs something new in the image (a package, a service), say so to
+  the developer rather than assuming the pi has it.

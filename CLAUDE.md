@@ -48,6 +48,9 @@ BEM class names. See `hts/README.md`, `hts/BEM.md` and `hts/BACKLOG.md` (Scrum a
 Definition of Done). The Scrum Guide is in `SCRUM_GUIDE.md`. hts needs Node 22.12+, unlike the
 web-api's Node 20.
 
+`image/` builds the custom pi OS image. Bump `image/VERSION` whenever a change alters what ends up
+in the image; `### Pi image` in `LLM_INSTRUCTIONS.md` says when and by how much.
+
 Deploying hts to the pi is manual on purpose: the developer copies a build with `scp` and runs the
 steps on the pi over ssh ("Publishing the hts PWA" in `README.md`). Do not add scripts that connect
 to the pi.
