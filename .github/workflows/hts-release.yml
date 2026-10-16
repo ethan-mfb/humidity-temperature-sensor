@@ -1,0 +1,80 @@
+name: hts Release
+
+# Builds hts when an hts-v<version> tag is pushed (see "Releasing" in the root
+# README) and attaches hts-<version>.tgz to the hts-v<version> release. On the
+# pi, hts/deploy/install-hts.sh downloads it from there; nothing here connects
+# to the pi.
+on:
+  push:
+    tags:
+      - 'hts-v*'
+
+permissions:
+  # To create the release.
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: hts
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'hts/package-lock.json'
+
+      # The footer shows package.json's version and the pi names the release
+      # directory after the tag, so the two must agree.
+      - name: Check the tag matches package.json
+        id: version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [[ "$TAG" != "hts-v${version}" ]]; then
+            echo "::error::Tag ${TAG} does not match hts/package.json version ${version}."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm run test:once
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: tar -czf "hts-${VERSION}.tgz" -C dist .
+
+      # --latest=false: releases/latest must stay the newest pi image, whose
+      # Imager manifest the README points Imager at.
+      - name: Publish the release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "hts v${VERSION}" \
+            --notes "hts v${VERSION}. On the pi: \`hts/deploy/install-hts.sh ${VERSION}\`, from the clone. See \"Publishing the hts PWA\" in the README." \
+            --latest=false \
+            "hts-${VERSION}.tgz"
