@@ -4,8 +4,8 @@
 #
 # Downloads the official Lite arm64 release pinned in base-image.env, installs
 # everything listed in packages.txt into it through a chroot, and writes
-# humidity-temp-sensor-v<VERSION>.img.xz to out/, to flash through the manifest
-# imager-manifest.sh writes for it.
+# humidity-temp-sensor-v<VERSION>.img.xz to out/, with its .sha256 and the
+# .imager-info that imager-manifest.sh builds Imager's manifest from.
 #
 # --url builds on a different release instead, checked against the checksum
 # published next to it. The version then gets a -unpinned suffix, so a trial
@@ -221,11 +221,27 @@ fstrim "$MNT" || warn "fstrim failed on root; the image will compress less well"
 
 cleanup
 
+# Imager checks what it writes against these and sizes its progress bar from
+# them. They describe the .img as written to the card, so are taken before
+# compressing.
+EXTRACT_SIZE="$(stat -c %s "$IMG")"
+EXTRACT_SHA256="$(sha256sum "$IMG" | cut -d' ' -f1)"
+
 say "Compressing"
 OUT_FILE="${OUT_DIR}/${IMAGE_SUFFIX}-v${VERSION}.img.xz"
 xz -T0 -6 -c "$IMG" > "$OUT_FILE"
 rm -f "$IMG"
 (cd "$OUT_DIR" && sha256sum "$(basename "$OUT_FILE")" > "$(basename "$OUT_FILE").sha256")
+
+# Everything imager-manifest.sh needs for the manifest but the image's URL.
+cat > "${OUT_FILE}.imager-info" <<EOF
+version=${VERSION}
+release_date=$(date -u +%Y-%m-%d)
+init_format=${BASE_IMAGE_INIT_FORMAT}
+extract_size=${EXTRACT_SIZE}
+extract_sha256=${EXTRACT_SHA256}
+image_download_sha256=$(cut -d' ' -f1 "${OUT_FILE}.sha256")
+EOF
 
 say "Done"
 cat <<EOF
@@ -233,6 +249,6 @@ cat <<EOF
   Image:   ${OUT_FILE}
   sha256:  $(cut -d' ' -f1 "${OUT_FILE}.sha256")
 
-  To flash it, run imager-manifest.sh on the .img.xz where Imager runs and
-  open the manifest it writes in Imager. See "Flashing" in README.md.
+  To flash this local build, run imager-manifest.sh on the .img.xz where
+  Imager runs and open the manifest it writes. See "Flashing" in README.md.
 EOF

@@ -2,13 +2,26 @@ name: Build Pi Image
 
 # Manual only: a build downloads ~540MB and takes several minutes, and most
 # pushes do not change the image. Run it after a change bumps image/VERSION.
+#
+# Publishes the image as the pi-image-v<VERSION> release, with a manifest that
+# Raspberry Pi Imager opens to download, verify and customize it. The manifest
+# has the same name in every release, so
+# releases/latest/download/humidity-temp-sensor.rpi-imager-manifest is always
+# the newest image.
 on:
   workflow_dispatch:
+
+permissions:
+  # To create the release.
+  contents: write
 
 jobs:
   build:
     # arm64 runner, so the chroot runs natively instead of under qemu.
     runs-on: ubuntu-24.04-arm
+
+    env:
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout code
@@ -16,31 +29,77 @@ jobs:
 
       - name: Read image version
         id: version
-        run: echo "version=$(tr -d '[:space:]' < image/VERSION)" >> "$GITHUB_OUTPUT"
+        run: |
+          version="$(tr -d '[:space:]' < image/VERSION)"
+          {
+            echo "version=${version}"
+            echo "tag=pi-image-v${version}"
+            echo "image=humidity-temp-sensor-v${version}.img.xz"
+          } >> "$GITHUB_OUTPUT"
+
+      # A release is the image of its VERSION, so a rebuild of the same VERSION
+      # does not replace it. Checked before the build rather than after it.
+      - name: Check the release is new
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::Release ${TAG} already exists. Bump image/VERSION, or delete the release to rebuild it."
+            exit 1
+          fi
 
       - name: Build image
         working-directory: image
         run: ./build.sh
 
-      - name: Upload image
-        uses: actions/upload-artifact@v7
-        with:
-          name: pi-image-v${{ steps.version.outputs.version }}
-          path: |
-            image/out/*.img.xz
-            image/out/*.img.xz.sha256
-          # Already xz-compressed; zipping it again only costs time.
-          compression-level: 0
-          retention-days: 14
+      - name: Write the Imager manifest
+        working-directory: image
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          IMAGE: ${{ steps.version.outputs.image }}
+        run: |
+          ./imager-manifest.sh \
+            --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${IMAGE}" \
+            --out out/humidity-temp-sensor.rpi-imager-manifest \
+            "out/${IMAGE}"
+
+      - name: Publish the release
+        working-directory: image/out
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          IMAGE: ${{ steps.version.outputs.image }}
+        run: |
+          latest="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/humidity-temp-sensor.rpi-imager-manifest"
+          cat > notes.md <<EOF
+          Pi image v${VERSION}. To flash it, open \`humidity-temp-sensor.rpi-imager-manifest\` in Raspberry Pi Imager, or set Imager's **App Options** > **Content Repository** to
+          ${latest}
+          and see "Flashing" in image/README.md.
+
+          \`\`\`
+          $(cat "${IMAGE}.sha256")
+          \`\`\`
+          EOF
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Pi image v${VERSION}" \
+            --notes-file notes.md \
+            --latest \
+            "$IMAGE" "${IMAGE}.sha256" humidity-temp-sensor.rpi-imager-manifest
 
       - name: Summarize
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          IMAGE: ${{ steps.version.outputs.image }}
         run: |
           {
-            echo "## Pi image v${{ steps.version.outputs.version }}"
+            echo "## Pi image v${VERSION}"
             echo
-            echo "Download the \`pi-image-v${{ steps.version.outputs.version }}\` artifact below."
+            echo "Published as [${TAG}](https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG})."
             echo
             echo '```'
-            cat image/out/*.img.xz.sha256
+            cat "image/out/${IMAGE}.sha256"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -21,19 +21,20 @@ A raspberry pi 0 2 w humidity and temperature sensor
 ### Building the image
 
 The pi runs a custom image: a pinned Raspberry Pi OS Lite (64-bit) release with git, the toolchain
-and libgpiod already installed, versioned by `image/VERSION`. Build it on a machine with docker, or
-with the **Build Pi Image** workflow in GitHub Actions. See [image/README.md](./image/README.md) for
-both, for the package list, and for when to bump the version.
+and libgpiod already installed, versioned by `image/VERSION`. Run the **Build Pi Image** workflow in
+GitHub Actions to publish it as a release, or build it on a machine with docker. See
+[image/README.md](./image/README.md) for both, for the package list, and for when to bump the
+version.
 
 ### Installing the OS
 
 1. download and install [imager](https://www.raspberrypi.com/software/)
-1. take the `.img.xz` from `image/out/`, or the one downloaded from the workflow run, and run
-   `image/imager-manifest.sh <the .img.xz>` on the machine Imager runs on. Imager 2 offers no
-   settings for a `Use custom` image; see "Flashing" in `image/README.md`
-1. double-click the `.rpi-imager-manifest` it writes to open it in Imager
+1. in Imager, set **App Options** > **Content Repository** > **Edit** > **Use custom URL** to
+   `https://github.com/ethan-mfb/humidity-temperature-sensor/releases/latest/download/humidity-temp-sensor.rpi-imager-manifest`
+   and click **Apply & Restart**. Once is enough; Imager keeps it. For a local build instead, see
+   "Flashing" in `image/README.md`
 1. choose `Raspberry Pi Zero 2 W` as the device and `Humidity temperature sensor` as the OS
-1. click edit settings
+1. customize the settings (Imager keeps them for the next flash)
    1. set hostname: `rpi20w`
    1. username: `alpha`
    1. password (check password manager)

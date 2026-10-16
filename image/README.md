@@ -9,7 +9,8 @@ through a manifest that lets Imager customize it (see [Flashing](#flashing)).
 - `VERSION`: the image's version. See [Versioning](#versioning).
 - `base-image.env`: the pinned Raspberry Pi OS release the image starts from.
 - `imager-manifest.sh`: writes the manifest Imager needs to offer OS
-  customization for the image. See [Flashing](#flashing).
+  customization for the image. The workflow publishes one with each release;
+  run it yourself only for a local build. See [Flashing](#flashing).
 - `packages.txt`: what gets installed, one package per line.
 - `Dockerfile`: the build environment `build.sh` uses.
 - `pi-status/`: the boot check that picks what nginx serves, and its installer.
@@ -34,7 +35,8 @@ through a manifest that lets Imager customize it (see [Flashing](#flashing)).
    It also writes `/etc/humidity-temp-sensor-image`, recording the version,
    the base image and the package list.
 1. Trims free space and writes `out/humidity-temp-sensor-v<VERSION>.img.xz`
-   with a `.sha256` next to it.
+   with a `.sha256` next to it, and a `.imager-info` holding the uncompressed
+   size and sha256 that Imager verifies the write against.
 
 The boot partition, `cmdline.txt` and the disk identifier are left alone. The
 first boot still grows the root partition to fill the card, and Imager's OS
@@ -69,9 +71,20 @@ docker run --privileged --rm tonistiigi/binfmt --install arm64
 ### On GitHub
 
 Run the **Build Pi Image** workflow from the Actions tab. It builds on an arm64
-runner and attaches the `.img.xz` to the run as the `pi-image-v<VERSION>`
-artifact, which is kept for 14 days. The run's summary shows the version and
-the image's sha256.
+runner and publishes the `pi-image-v<VERSION>` release with three assets: the
+`.img.xz`, its `.sha256`, and `humidity-temp-sensor.rpi-imager-manifest`, whose
+URL points at that release's `.img.xz`. The release is marked latest, so
+
+```text
+https://github.com/ethan-mfb/humidity-temperature-sensor/releases/latest/download/humidity-temp-sensor.rpi-imager-manifest
+```
+
+is always the newest image's manifest.
+
+A release is the image of its `VERSION`. The workflow fails before building if
+the release already exists: bump `VERSION`, or delete the release (and its
+tag) to rebuild it. Releases do not expire, so delete old ones you no longer
+need.
 
 ## Flashing
 
@@ -80,31 +93,44 @@ it only customizes images it finds in an OS list, which says how (the
 `init_format`). So the image is opened through a manifest instead, a one-entry
 OS list that points at it.
 
+### A release
+
 1. download and install [imager](https://www.raspberrypi.com/software/)
-1. on the machine Imager runs on, with the `.img.xz` where it will stay (the
-   manifest points at it by absolute path), run:
-
-   ```bash
-   image/imager-manifest.sh path/to/humidity-temp-sensor-v<VERSION>.img.xz
-   ```
-
-   It writes `humidity-temp-sensor-v<VERSION>.img.xz.rpi-imager-manifest` next
-   to the image.
-1. double-click the manifest to open it in Imager, or open Imager with
-   `rpi-imager path/to/the.rpi-imager-manifest`, or pick it under **App
-   Options** > **Content Repository** > **EDIT** > **Use custom file**. The OS
-   list then shows only this image.
+1. open the manifest in Imager, either way:
+   - once and for good: **App Options** > **Content Repository** > **Edit** >
+     **Use custom URL**, set to the `releases/latest/download/...` URL from
+     [On GitHub](#on-github), then **Apply & Restart**. Imager lists the newest
+     release every time it starts.
+   - for one flash: download `humidity-temp-sensor.rpi-imager-manifest` from
+     the release and double-click it, or run `rpi-imager <the manifest>`.
 1. choose the Raspberry Pi Zero 2 W and the **Humidity temperature sensor**
-   OS. You don't need to decompress the image first.
+   OS. Imager downloads the image itself and checks the write against its
+   sha256.
 1. apply the same OS customization settings as in the root README's
-   [Installing the OS](../README.md#installing-the-os)
+   [Installing the OS](../README.md#installing-the-os). Imager keeps them for
+   the next flash.
+
+### A local build
+
+The manifest has to point at the image by absolute path, because Imager takes
+an image's URL as written rather than relative to the manifest. So write it
+on the machine Imager runs on, with the `.img.xz` where it will stay:
+
+```bash
+image/imager-manifest.sh path/to/humidity-temp-sensor-v<VERSION>.img.xz
+```
+
+It writes `humidity-temp-sensor-v<VERSION>.img.xz.rpi-imager-manifest` next to
+the image. Keep the build's `.imager-info` beside the image so the manifest
+includes the checksums. Then open the manifest and carry on as for a release.
+
+### Notes
 
 The manifest takes the `init_format` from `BASE_IMAGE_INIT_FORMAT` in
 `base-image.env`. trixie's is `cloudinit-rpi`. Imager 1.x applied
 customization to any custom image without knowing the format; 2.0 stopped
-because applying the wrong one breaks the first boot. If **Content Repository**
-was set to the manifest, set it back to the default to see the official OS list
-again.
+because applying the wrong one breaks the first boot. To see the official OS
+list again, set **Content Repository** back to the default.
 
 ## What is not in the image
 
