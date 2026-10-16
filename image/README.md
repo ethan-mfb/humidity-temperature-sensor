@@ -156,8 +156,10 @@ what ends up in the image:
 | A fix to `build-image.sh` or `pi-status/` that changes the image without adding anything | patch |
 | `README.md`, comments, `build.sh`, `Dockerfile`, `imager-manifest.sh`, or anything outside `image/` | none |
 
-So a rebuild is due when `VERSION` is ahead of the image you last built. To see
-what a pi is running, `cat /etc/humidity-temp-sensor-image` on it.
+So a new release is due when `VERSION` is ahead of the latest
+`pi-image-v<VERSION>` release, and the workflow will not publish a version
+twice. To see what a pi is running, `cat /etc/humidity-temp-sensor-image` on
+it.
 
 Pinning the base image pins the starting point, not every package: `apt-get
 install` still takes the newest versions in the archive on the day of the

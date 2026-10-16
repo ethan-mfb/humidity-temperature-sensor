@@ -183,9 +183,12 @@ rebuild is due:
   - Minor: a newer base release within the same Debian release, a package added or removed, or
     new behaviour baked in.
   - Patch: a fix that changes the image without adding anything.
-- `image/README.md`, comments, `image/build.sh`, `image/Dockerfile`, or anything outside `image/`:
-  do not bump it.
+- `image/README.md`, comments, `image/build.sh`, `image/Dockerfile`, `image/imager-manifest.sh`, or
+  anything outside `image/`: do not bump it.
 - Bump at most once per change, even if it spans several commits.
+- The **Build Pi Image** workflow publishes each version as the `pi-image-v<VERSION>` GitHub release
+  and refuses a version that already has one, so an image change that is not bumped cannot be
+  released. The developer runs the workflow; do not run it or create releases yourself.
 - Never point `image/base-image.env` at `raspios_lite_arm64_latest`; pin a dated release and its
   sha256. "Updating the base image" in `image/README.md` has the steps.
 - If a change outside `image/` needs something new in the image (a package, a service), say so to
