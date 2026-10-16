@@ -15,8 +15,8 @@ The MVP is a hello world that installs, works offline and updates. Sensor readin
 
 ## Getting started
 
-Requires Node 22.12 or newer (Vite 8's minimum). This is separate from the web-api, which stays on
-Node 16 for `onoff`; the pi never runs Node for hts, only nginx.
+Requires Node 22.12 or newer (Vite 8's minimum). This is separate from the web-api, which runs on
+Node 20 on the pi; the pi never runs Node for hts, only nginx.
 
 ```bash
 cd hts

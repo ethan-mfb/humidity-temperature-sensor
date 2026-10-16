@@ -46,7 +46,7 @@ hts is a React/TypeScript/Sass PWA built with clean architecture (`src/domain`, 
 `src/adapters`, `src/infrastructure`; dependencies point inward, lint enforces it), test first, with
 BEM class names. See `hts/README.md`, `hts/BEM.md` and `hts/BACKLOG.md` (Scrum artifacts and
 Definition of Done). The Scrum Guide is in `SCRUM_GUIDE.md`. hts needs Node 22.12+, unlike the
-web-api's Node 16.
+web-api's Node 20.
 
 Deploying hts to the pi is manual on purpose: the developer copies a build with `scp` and runs the
 steps on the pi over ssh ("Publishing the hts PWA" in `README.md`). Do not add scripts that connect

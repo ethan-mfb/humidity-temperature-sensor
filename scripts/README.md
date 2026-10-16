@@ -88,13 +88,13 @@ already installed, so skip straight to the `git clone`.
 
 Lite already ships most of what `setup-pi.sh` installs: as of the 2026-09-15
 image, `libgpiod-dev` is the only apt package it adds. The custom image has all
-of them, so there the script's apt step changes nothing, and node 16 is the
+of them, so there the script's apt step changes nothing, and node 20 is the
 only thing it actually installs.
 
 Cloning beats `scp` here because the dev container has no bind mount to the
 host — `devcontainer.sh` runs with container-only storage, so the working tree
 exists only inside the container and the host has nothing to copy from. Pass
-`--skip-node` if you only want the capture tooling; node 16 is installed for the
+`--skip-node` if you only want the capture tooling; node 20 is installed for the
 `web-api`, and `capture-sensor.mjs` itself runs on any current node.
 
 The manual equivalent, if you would rather not run the script:

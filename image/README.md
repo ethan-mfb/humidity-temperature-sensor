@@ -87,7 +87,7 @@ The hts site, its certificate and its releases. nginx and pi-status are in
 the image, but those are per pi and set up by hand after flashing; see
 "Publishing the hts PWA" in the root README.
 
-Node 16. The README installs it with nvm into `~alpha/.nvm`, and that user
+Node 20. The README installs it with nvm into `~alpha/.nvm`, and that user
 does not exist until Imager's customization creates it at first boot. Run
 `scripts/setup-pi.sh` after flashing as usual. Its apt step finds everything
 already installed, so in practice it only installs node and builds the
