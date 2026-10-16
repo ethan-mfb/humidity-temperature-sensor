@@ -134,15 +134,13 @@ list again, set **Content Repository** back to the default.
 
 ## What is not in the image
 
-The hts site, its certificate and its releases. nginx and pi-status are in
-the image, but those are per pi and set up by hand after flashing; see
-"Publishing the hts PWA" in the root README.
+The hts site, its certificate and its releases, and the web-api. nginx and
+pi-status are in the image, but the rest is per pi: `scripts/setup-pi.sh`
+sets it up after flashing; see "Setting up the pi" in the root README.
 
-Node 20. The README installs it with nvm into `~alpha/.nvm`, and that user
-does not exist until Imager's customization creates it at first boot. Run
-`scripts/setup-pi.sh` after flashing as usual. Its apt step finds everything
-already installed, so in practice it only installs node and builds the
-capture helper.
+Node 20. `setup-pi.sh` installs it with nvm into `~alpha/.nvm`, and that user
+does not exist until Imager's customization creates it at first boot. Its apt
+step finds everything else already installed.
 
 ## Versioning
 

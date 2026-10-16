@@ -52,9 +52,9 @@ web-api's Node 20.
 release with a Raspberry Pi Imager manifest. Bump `image/VERSION` whenever a change alters what ends
 up in the image; `### Pi image` in `LLM_INSTRUCTIONS.md` says when and by how much.
 
-Deploying hts to the pi is manual on purpose: the developer copies a build with `scp` and runs the
-steps on the pi over ssh ("Publishing the hts PWA" in `README.md`). Do not add scripts that connect
-to the pi.
+Deploying to the pi is manual on purpose: the developer ssh's in and runs the pi-side scripts
+(`scripts/setup-pi.sh`, `hts/deploy/install-hts.sh`; "pi setup" in `README.md`). CI builds hts
+releases for the pi to download. Do not add scripts that connect to the pi.
 
 ## Repository-Wide Standards
 

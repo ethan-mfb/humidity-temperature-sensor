@@ -114,15 +114,14 @@ over plain http the app loads but can neither install nor update. `deploy/` has 
 
 If hts cannot be served (no certificate, an expired one, no release), the pi's `pi-status` boot
 check serves a status page at <http://rpi20w.local/> saying what is wrong, instead of nginx failing
-to start. See
-[When the pi shows a status page](../README.md#when-the-pi-shows-a-status-page).
+to start. See [Troubleshooting](../README.md#troubleshooting).
 
 The app is at <https://rpi20w.local/>; <http://rpi20w.local/> redirects there. The web-api is at
 <https://rpi20w.local/api/> through nginx, so the app calls it with relative paths like
 `/api/temp-sensor/stream`: same origin, so no CORS, and https, so no mixed content. The service
 worker leaves `/api/` and `/api-docs/` to the network instead of answering them with the app. The
-web-api itself listens on port 3000 (see
-[Running the web-api as a service](../README.md#running-the-web-api-as-a-service)).
+web-api itself listens on port 3000, as the `web-api` systemd service that `scripts/setup-pi.sh`
+writes.
 
 Deploying is done by hand: tag a release, which CI builds, then ssh into the pi and run
 `deploy/install-hts.sh`. The steps are in
