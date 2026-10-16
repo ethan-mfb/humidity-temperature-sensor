@@ -1,12 +1,11 @@
 {
   "name": "sensor-capture-scripts",
   "version": "1.0.0",
-  "description": "DHT22/AM2302 signal capture and capture validation, run on the pi",
+  "description": "DHT22/AM2302 signal capture, run on the pi",
   "private": true,
   "type": "module",
   "scripts": {
-    "capture": "node capture-sensor.mjs",
-    "validate": "node validate-capture.mjs"
+    "capture": "node capture-sensor.mjs"
   },
   "dependencies": {
     "dht22-capture": "file:../dht22-capture"

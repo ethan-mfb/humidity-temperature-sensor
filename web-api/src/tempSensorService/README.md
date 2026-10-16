@@ -41,6 +41,29 @@ Tests inject a fake source, so the whole service runs with no hardware.
   - Side-effects (GPIO subscription, timers) are isolated; decoding and validation are pure functions.
 - Errors are returned/emitted as values. Only throw to halt on unrecoverable initialization failures.
 
+## Real captures
+
+Frames off the pi are not the datasheet's frames, and the decoder is written
+against `__tests__/fixtures/capture-1.jsonl`, 30 reads from a Pi Zero 2 W.
+
+**Leading bits lost.** Edge detection is armed by the same
+`gpiod_line_request_reconfigure_lines()` call that releases the line, so the
+sensor's 80us/80us response pair and the first few data bits land before the
+IRQ is live. In capture-1 every record lost 1 to 4 bits and none kept the
+response pair. The decoder strips the pair when it is there (an 80us low then an
+80us high within the first few pulses) and fills lost leading bits back in as
+zeros. That is sound only because relative humidity tops out at 100%, so a
+frame's first 6 bits are always zero; past 6 the frame is rejected rather than
+guessed at.
+
+**A dropped edge.** An edge the kernel never delivered shows up as two
+consecutive pulses at the same level. A lost falling edge merges two bits into
+one wide high, which is where the 117us and 122us highs in capture-1 come from;
+clean frames top out under 90us. A lost rising edge swallows a bit into a low.
+Every bit after it is shifted, and the 8-bit checksum is too weak to be the only
+guard against that, so any frame with a dropped edge is rejected. 12 of
+capture-1's 30 records are; the other 18 decode to 49.4-49.7% RH at 24.3C.
+
 ## Module Layout
 
 | File              | Contents                                                               |
@@ -141,6 +164,7 @@ Example configuration constants live in `src/tempSensorService/constants.ts`.
 - Unit-test pure reducers for: pulse->bit, bit->frame, checksum verification, and range validation.
 - Unit-test the service state machine: lifecycle transitions, error propagation, `getLatestReading()` behavior after errors, and subscription/unsubscription.
 - Integration-test against a fake `SensorFrameSource` (queue frames, failed captures and outright rejections).
+- Replay real captures from `__tests__/fixtures/` through `toPulses` and `decodeFrame` (`capture.test.ts`).
 - Use `npm run test:once` to avoid watch mode in CI; run `npm run typecheck` and `npm run lint` to enforce typing and style.
 
 ## Future Extensions

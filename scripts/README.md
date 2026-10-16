@@ -5,7 +5,6 @@ included in `npm run package`.
 
 - `setup-pi.sh` — takes a freshly flashed image to a working capture setup.
 - `capture-sensor.mjs` — drives the sensor and records the raw edge stream.
-- `validate-capture.mjs` — decodes a capture and reports what the frames carry.
 
 The GPIO work itself lives in the [`dht22-capture`](../dht22-capture/) package:
 the timing-critical C helper and the node wrapper that spawns it. It is a
@@ -261,53 +260,16 @@ Remove the overlay line and reboot before capturing again — the kernel driver
 holds the pin, and the helper will exit with an `EBUSY` hint if it is still
 loaded.
 
-## `validate-capture.mjs`
+## Replaying a capture against the decoder
 
-Replays a capture against the AM2302 frame format and reports, per record,
-whether it yields a checksum-valid reading. It reads a file and touches no
-hardware, so it runs on the dev machine.
+There is no separate validator: a capture is tested against the decoder the
+`web-api` actually runs. Copy it into
+[`web-api/src/tempSensorService/__tests__/fixtures/`](../web-api/src/tempSensorService/__tests__/fixtures/)
+as one compact JSON object per line, and pin down what each record should
+decode to in a test like `capture.test.ts`. Captures often come back from the pi
+pretty-printed; `jq -c . capture.jsonl` flattens one.
 
-```bash
-node validate-capture.mjs --in capture-1.jsonl
-node validate-capture.mjs --in capture-1.jsonl --quiet   # summary only
-```
-
-Exit status is 1 if no record decodes, which makes it usable as a check on a
-capture before anything is built on it.
-
-It accepts JSONL as `capture-sensor.mjs` writes it, and also plain concatenated
-JSON objects, because captures routinely get pretty-printed on the way back from
-the pi.
-
-### What the columns mean
-
-| Column    | Meaning                                                   |
-| --------- | --------------------------------------------------------- |
-| `edges`   | Edges in the record, as captured.                         |
-| `bits`    | Data bits recovered from them. A whole frame is 40.       |
-| `pad`     | Leading bits missing, filled back in as zeros.            |
-| `dropped` | Places where two consecutive edges report the same level. |
-
-### The two defects it separates
-
-**Leading bits lost (`pad`).** Edge detection is armed by the same
-`gpiod_line_request_reconfigure_lines()` call that releases the line, so the
-sensor's 80us/80us response handshake and the first few data bits land before
-the IRQ is live. Measured on `capture-1.jsonl`: 1 to 4 bits lost on every
-record, and the handshake present on none of the 30.
-
-This is recoverable, but only by an accident of the protocol — relative humidity
-tops out at 100%, so the frame's first 6 bits are always zero and can be filled
-back in. Past 6 the record is reported unrecoverable rather than guessed at.
-
-**A dropped edge (`dropped`).** An edge the kernel never delivered, which shows
-up as two consecutive transitions reporting the same level. Position decides
-severity: one among the first few edges costs a bit that `pad` restores, one
-mid-frame shifts every bit after it and the checksum fails.
-
-### Reference capture
-
-`capture-1.jsonl` is 30 reads from a Pi Zero 2 W, kept in the repository as the
-case this tool was written against — it is the one `*.jsonl` the
-[.gitignore](../.gitignore) lets through. 23 of its 30 records decode to
-49.4-49.8% RH at 24.3C.
+`capture-1.jsonl` there is 30 reads from a Pi Zero 2 W, and the one `*.jsonl`
+pattern the [.gitignore](../.gitignore) lets through is that fixtures folder.
+What its records show about the capture, and how the decoder handles it, is in
+the [temp sensor service README](../web-api/src/tempSensorService/README.md#real-captures).
