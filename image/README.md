@@ -6,15 +6,16 @@ Builds a Raspberry Pi OS Lite (64-bit) image with the packages in
 
 - `build.sh`: runs the build in a privileged arm64 docker container. Start here.
 - `build-image.sh`: the build itself. Needs root and loop devices.
+- `VERSION`: the image's version. See [Versioning](#versioning).
+- `base-image.env`: the pinned Raspberry Pi OS release the image starts from.
 - `packages.txt`: what gets installed, one package per line.
 - `Dockerfile`: the build environment `build.sh` uses.
 - `pi-status/`: the boot check that picks what nginx serves, and its installer.
 
 ## What the build does
 
-1. Follows `https://downloads.raspberrypi.com/raspios_lite_arm64_latest` to the
-   current release and downloads it. The download is checked against the
-   published `.sha256` and cached, so a rebuild skips it.
+1. Downloads the release pinned in `base-image.env`. The download is checked
+   against the sha256 pinned with it and cached, so a rebuild skips it.
 1. Decompresses it, grows the root partition by 1GB (`--grow-mb`), and resizes
    the filesystem to fill the new space.
 1. Mounts both partitions, chroots in and runs `apt-get install` on
@@ -28,10 +29,10 @@ Builds a Raspberry Pi OS Lite (64-bit) image with the packages in
    in the root README.
 1. Puts back everything that makes the first boot a first boot: an empty
    `machine-id`, no daemons started, and the image's original `resolv.conf`.
-   It also writes `/etc/humidity-temp-sensor-image`, recording the base image
-   and the package list.
-1. Trims free space and writes `out/<base>-humidity-temp-sensor.img.xz` with a
-   `.sha256` next to it.
+   It also writes `/etc/humidity-temp-sensor-image`, recording the version,
+   the base image and the package list.
+1. Trims free space and writes `out/humidity-temp-sensor-v<VERSION>.img.xz`
+   with a `.sha256` next to it.
 
 The boot partition, `cmdline.txt` and the disk identifier are left alone. The
 first boot still grows the root partition to fill the card, and Imager's OS
@@ -50,8 +51,9 @@ cd humidity-temperature-sensor/image
 ./build.sh
 ```
 
-The output lands in `image/out/`. Pin a specific release instead of the latest
-with `./build.sh --url <...img.xz url>`.
+The output lands in `image/out/`. To try a different Raspberry Pi OS release
+without changing the pin, run `./build.sh --url <...img.xz url>`. That image is
+versioned `<VERSION>-unpinned`, so it is never mistaken for a release.
 
 The builder container is arm64. On Apple Silicon or another arm64 host it runs
 natively. On an x86_64 host docker emulates it with qemu, which works but is
@@ -65,8 +67,9 @@ docker run --privileged --rm tonistiigi/binfmt --install arm64
 ### On GitHub
 
 Run the **Build Pi Image** workflow from the Actions tab. It builds on an arm64
-runner and attaches the `.img.xz` to the run as the `pi-image` artifact, which
-is kept for 14 days.
+runner and attaches the `.img.xz` to the run as the `pi-image-v<VERSION>`
+artifact, which is kept for 14 days. The run's summary shows the version and
+the image's sha256.
 
 ## Flashing
 
@@ -93,11 +96,43 @@ does not exist until Imager's customization creates it at first boot. Run
 already installed, so in practice it only installs node and builds the
 capture helper.
 
+## Versioning
+
+`VERSION` is a semantic version, bumped in the same commit as any change to
+what ends up in the image:
+
+| Change | Bump |
+|---|---|
+| Base image moves to a new Debian release (e.g. trixie to forky), or a change that means redoing the per-pi setup after flashing | major |
+| Base image moves to a newer release of the same Debian release, a package is added or removed, or the image gains behaviour (e.g. a pi-status check) | minor |
+| A fix to `build-image.sh` or `pi-status/` that changes the image without adding anything | patch |
+| `README.md`, comments, `build.sh`, `Dockerfile`, or anything outside `image/` | none |
+
+So a rebuild is due when `VERSION` is ahead of the image you last built. To see
+what a pi is running, `cat /etc/humidity-temp-sensor-image` on it.
+
+Pinning the base image pins the starting point, not every package: `apt-get
+install` still takes the newest versions in the archive on the day of the
+build, so two builds of the same `VERSION` can differ in package patch levels.
+
+### Updating the base image
+
+1. Find the current release and its checksum:
+
+   ```bash
+   url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+     https://downloads.raspberrypi.com/raspios_lite_arm64_latest)
+   echo "$url"; curl -fsSL "$url.sha256"
+   ```
+
+1. Put both in `base-image.env`, bump `VERSION` (minor, or major for a new
+   Debian release) and build.
+
 ## Adding packages
 
-Add a line to `packages.txt` and rebuild. Packages are installed with apt's
-defaults, recommends included, so the result is the same as running
-`sudo apt install <package>` on the pi.
+Add a line to `packages.txt`, bump `VERSION` (minor) and rebuild. Packages are
+installed with apt's defaults, recommends included, so the result is the same
+as running `sudo apt install <package>` on the pi.
 
 ## Why not the dev container
 

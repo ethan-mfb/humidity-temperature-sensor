@@ -2,9 +2,13 @@
 #
 # Builds a custom Raspberry Pi OS Lite (64-bit) image for Raspberry Pi Imager.
 #
-# Downloads the latest official Lite arm64 image, installs everything listed in
-# packages.txt into it through a chroot, and writes a .img.xz to out/ that
-# Imager flashes through "Use custom".
+# Downloads the official Lite arm64 release pinned in base-image.env, installs
+# everything listed in packages.txt into it through a chroot, and writes
+# humidity-temp-sensor-v<VERSION>.img.xz to out/ for Imager's "Use custom".
+#
+# --url builds on a different release instead, checked against the checksum
+# published next to it. The version then gets a -unpinned suffix, so a trial
+# build is never mistaken for a release of VERSION.
 #
 # Needs root, loop devices and an arm64 userland (native or via binfmt/qemu),
 # so it does not run in the dev container. Use build.sh, which provides all
@@ -17,10 +21,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_SUFFIX="humidity-temp-sensor"
 PACKAGES_FILE="${SCRIPT_DIR}/packages.txt"
-
-# Redirects to the current release, e.g.
-# .../raspios_lite_arm64-2026-09-15/2026-09-15-raspios-trixie-arm64-lite.img.xz
-LATEST_URL="https://downloads.raspberrypi.com/raspios_lite_arm64_latest"
+VERSION="$(tr -d '[:space:]' < "${SCRIPT_DIR}/VERSION")"
+# shellcheck source=base-image.env
+. "${SCRIPT_DIR}/base-image.env"
 
 CACHE_DIR="${CACHE_DIR:-${SCRIPT_DIR}/cache}"
 WORK_DIR="${WORK_DIR:-${CACHE_DIR}/work}"
@@ -37,7 +40,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --url) SOURCE_URL="$2"; shift 2 ;;
     --grow-mb) GROW_MB="$2"; shift 2 ;;
-    -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -66,18 +69,23 @@ mkdir -p "$CACHE_DIR" "$WORK_DIR" "$OUT_DIR"
 
 say "Resolving the base image"
 if [ -z "$SOURCE_URL" ]; then
-  SOURCE_URL="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$LATEST_URL")"
+  SOURCE_URL="$BASE_IMAGE_URL"
+  EXPECTED_SHA="$BASE_IMAGE_SHA256"
+  ok "pinned: $SOURCE_URL"
+else
+  EXPECTED_SHA="$(curl -fsSL "${SOURCE_URL}.sha256" | awk '{print $1}')"
+  VERSION="${VERSION}-unpinned"
+  warn "not the pinned base; building ${VERSION}"
+  ok "$SOURCE_URL"
 fi
 SOURCE_FILE="$(basename "$SOURCE_URL")"
 BASE_NAME="${SOURCE_FILE%.img.xz}"
-ok "$SOURCE_URL"
 
 say "Downloading ${SOURCE_FILE}"
-EXPECTED_SHA="$(curl -fsSL "${SOURCE_URL}.sha256" | awk '{print $1}')"
 SOURCE_PATH="${CACHE_DIR}/${SOURCE_FILE}"
 
 if [ -f "$SOURCE_PATH" ] && echo "${EXPECTED_SHA}  ${SOURCE_PATH}" | sha256sum -c --status; then
-  ok "cached copy matches the published sha256"
+  ok "cached copy matches the expected sha256"
 else
   # -C - resumes a partial download left by an interrupted run.
   curl -fL -C - -o "${SOURCE_PATH}.part" "$SOURCE_URL"
@@ -197,6 +205,7 @@ rm -f "$MNT/etc/resolv.conf"
 mv "$MNT/etc/resolv.conf.image-build" "$MNT/etc/resolv.conf" 2> /dev/null || true
 
 cat > "$MNT/etc/humidity-temp-sensor-image" <<EOF
+version=${VERSION}
 base_image=${SOURCE_FILE}
 base_sha256=${EXPECTED_SHA}
 built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -212,15 +221,16 @@ fstrim "$MNT" || warn "fstrim failed on root; the image will compress less well"
 cleanup
 
 say "Compressing"
-OUT_FILE="${OUT_DIR}/${BASE_NAME}-${IMAGE_SUFFIX}.img.xz"
+OUT_FILE="${OUT_DIR}/${IMAGE_SUFFIX}-v${VERSION}.img.xz"
 xz -T0 -6 -c "$IMG" > "$OUT_FILE"
 rm -f "$IMG"
 (cd "$OUT_DIR" && sha256sum "$(basename "$OUT_FILE")" > "$(basename "$OUT_FILE").sha256")
 
 say "Done"
 cat <<EOF
-  Image:  ${OUT_FILE}
-  sha256: $(cut -d' ' -f1 "${OUT_FILE}.sha256")
+  Version: ${VERSION}
+  Image:   ${OUT_FILE}
+  sha256:  $(cut -d' ' -f1 "${OUT_FILE}.sha256")
 
   In Raspberry Pi Imager, choose "Use custom" and select the .img.xz.
 EOF

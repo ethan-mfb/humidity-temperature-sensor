@@ -20,10 +20,10 @@ A raspberry pi 0 2 w humidity and temperature sensor
 
 ### Building the image
 
-The pi runs a custom image: the latest Raspberry Pi OS Lite (64-bit) with git, the toolchain and
-libgpiod already installed. Build it on a machine with docker, or with the **Build Pi Image**
-workflow in GitHub Actions. See [image/README.md](./image/README.md) for both, and for the package
-list.
+The pi runs a custom image: a pinned Raspberry Pi OS Lite (64-bit) release with git, the toolchain
+and libgpiod already installed, versioned by `image/VERSION`. Build it on a machine with docker, or
+with the **Build Pi Image** workflow in GitHub Actions. See [image/README.md](./image/README.md) for
+both, for the package list, and for when to bump the version.
 
 ### Installing the OS
 
