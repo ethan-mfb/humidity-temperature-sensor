@@ -3,8 +3,8 @@ dist/
 publish/
 dht22-capture/bin/gpiod-capture
 *.jsonl
-# kept as the reference capture validate-capture.mjs is developed against
-!scripts/capture-1.jsonl
+# real pi captures the decoder is tested against
+!web-api/src/tempSensorService/__tests__/fixtures/*.jsonl
 captures/
 image/cache/
 image/out/
