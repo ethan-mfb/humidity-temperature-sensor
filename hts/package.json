@@ -11,6 +11,7 @@
     "test:once": "vitest run",
     "test:watch": "vitest watch",
     "test:e2e": "playwright test",
+    "test:deploy": "node --test \"deploy/test/**/*.test.mjs\"",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint .",
     "check-formatting": "prettier --check \"src/**/*.{ts,tsx,scss,json,md}\" \"e2e/**/*.ts\" \"*.{ts,js,json,md}\"",

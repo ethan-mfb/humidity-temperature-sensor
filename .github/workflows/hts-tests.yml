@@ -35,6 +35,9 @@ jobs:
       - name: Unit tests
         run: npm run test:once
 
+      - name: Deploy script tests
+        run: npm run test:deploy
+
       - name: Type check
         run: npm run typecheck
 

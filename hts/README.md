@@ -40,6 +40,7 @@ All run from `hts/`.
 | `npm run test:once`        | Unit tests, once. Use this one, not `test:watch`, from scripts and agents. |
 | `npm run test:watch`       | Unit tests in watch mode, for the red/green loop                           |
 | `npm run test:e2e`         | Playwright tests against real production builds                            |
+| `npm run test:deploy`      | Tests for the pi-side scripts in `deploy/`                                 |
 | `npm run typecheck`        | `tsc` over the app, then over the e2e tests and configs                    |
 | `npm run lint`             | ESLint, including the architecture rules below                             |
 | `npm run check-formatting` | Prettier check                                                             |
