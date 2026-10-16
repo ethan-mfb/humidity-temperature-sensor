@@ -64,6 +64,18 @@ test.describe("hts PWA", () => {
     ).toBeVisible();
   });
 
+  test("leaves the web-api's paths to the server", async ({ page }) => {
+    await openOfflineReady(page, server);
+    // nginx proxies these to the web-api; the service worker must not answer
+    // them with the app.
+    for (const path of ["api/temp-sensor/status", "api-docs/"]) {
+      await page.goto(new URL(path, server.url).href);
+      await expect(
+        page.getByRole("heading", { level: 1, name: text.heading }),
+      ).toHaveCount(0);
+    }
+  });
+
   const acceptUpdate = async (page: Page): Promise<void> => {
     server.deploy(buildOf(VERSIONS.next));
     await page.evaluate(async () => {

@@ -39,6 +39,9 @@ export default defineConfig({
         // activates the new worker but never hands it the page. The new worker
         // still waits for the user before activating.
         clientsClaim: true,
+        // nginx proxies these to the web-api. Without this, the service
+        // worker answers a navigation to them with the app's index.html.
+        navigateFallbackDenylist: [/^\/api\//, /^\/api-docs(\/|$)/],
       },
       devOptions: { enabled: false },
     }),
