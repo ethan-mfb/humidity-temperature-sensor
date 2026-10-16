@@ -124,6 +124,58 @@ describe("decodeBitsFromFramePulses", () => {
     });
   });
 
+  it("returns a signal error when a falling edge was dropped mid-frame", () => {
+    const pulses = createLateArmedFramePulses(roomConditionsBytes, 3);
+    const lowIndex = 40;
+    // Without the falling edge, a high, the low after it and the next rise
+    // arrive as one wide high: the 117-122us pulses seen on real captures.
+    const merged = createPulse(
+      GPIO_LEVELS.HIGH,
+      (pulses[lowIndex - 1].durationUs as number) +
+        (pulses[lowIndex].durationUs as number),
+    );
+
+    const result = decodeBitsFromFramePulses([
+      ...pulses.slice(0, lowIndex - 1),
+      merged,
+      ...pulses.slice(lowIndex + 1),
+    ]);
+
+    expect(result).toEqual({
+      type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
+      message: expect.stringContaining("dropped edge"),
+    });
+  });
+
+  it("returns a signal error when a rising edge was dropped mid-frame", () => {
+    const pulses = createLateArmedFramePulses(roomConditionsBytes, 3);
+    const highIndex = 41;
+
+    const result = decodeBitsFromFramePulses([
+      ...pulses.slice(0, highIndex),
+      ...pulses.slice(highIndex + 1),
+    ]);
+
+    expect(result).toEqual({
+      type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
+      message: expect.stringContaining("dropped edge"),
+    });
+  });
+
+  it("returns a signal error for a dropped edge even among the leading bits", () => {
+    const pulses = createLateArmedFramePulses(roomConditionsBytes, 1);
+
+    const result = decodeBitsFromFramePulses([
+      ...pulses.slice(0, 1),
+      ...pulses.slice(2),
+    ]);
+
+    expect(result).toEqual({
+      type: TEMP_SENSOR_ERROR_TYPES.SIGNAL,
+      message: expect.stringContaining("dropped edge"),
+    });
+  });
+
   it("propagates the first malformed pulse", () => {
     const pulses = [...createFramePulses(roomConditionsBytes)];
     pulses[5] = createPulse(GPIO_LEVELS.HIGH, 500);

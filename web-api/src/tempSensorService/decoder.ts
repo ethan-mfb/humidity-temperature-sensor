@@ -93,6 +93,21 @@ export function stripSensorResponse(
 }
 
 /**
+ * Finds where two consecutive pulses held the same level, which means the
+ * kernel never delivered the edge between them. A lost falling edge merges two
+ * bits into one wide high; a lost rising edge swallows a bit into a low. Either
+ * way every bit after it is shifted, and the 8-bit checksum is too weak to be
+ * the only thing standing between a shifted frame and a wrong reading.
+ */
+export function findDroppedEdge(pulses: readonly Pulse[]): number {
+  return pulses.findIndex(
+    (pulse, index) =>
+      pulses[index + 1] !== undefined &&
+      unwrapGpioValue(pulse.value) === unwrapGpioValue(pulses[index + 1].value),
+  );
+}
+
+/**
  * Extracts the data bits from a frame's pulses. Only high pulses carry data.
  *
  * Leading bits lost to late edge detection are filled back in as zeros, which
@@ -102,6 +117,14 @@ export function stripSensorResponse(
 export function decodeBitsFromFramePulses(
   pulses: readonly Pulse[],
 ): readonly Bit[] | TempSensorError {
+  const droppedEdgeIndex = findDroppedEdge(pulses);
+
+  if (droppedEdgeIndex !== -1) {
+    return signalError(
+      `Frame has a dropped edge after pulse ${droppedEdgeIndex}`,
+    );
+  }
+
   const dataPulses = stripSensorResponse(pulses).filter(isHigh);
   const lostLeadingBits = FRAME.DATA_BIT_COUNT - dataPulses.length;
 
