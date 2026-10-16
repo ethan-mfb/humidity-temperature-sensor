@@ -149,9 +149,10 @@ the files across by hand, and why the timing-critical part is a C helper rather 
 
 ### Running the web-api as a service
 
-The web-api serves HTTP on its own, on port 3000, so there is no apache or nginx in front of it.
-Ports 80 and 443 belong to nginx, which serves the hts PWA (see
-[Publishing the hts PWA](#publishing-the-hts-pwa)). systemd keeps the web-api running across
+The web-api serves HTTP on port 3000. Ports 80 and 443 belong to nginx, which serves the hts PWA
+and proxies `/api/` and `/api-docs/` to the web-api, so the app reaches the API at
+<https://rpi20w.local/api/> on its own origin (see [Publishing the hts PWA](#publishing-the-hts-pwa)).
+Port 3000 still answers directly, which is handy for debugging. systemd keeps the web-api running across
 reboots and restarts it if it crashes.
 
 1. `ssh alpha@rpi20w.local`
@@ -181,7 +182,8 @@ reboots and restarts it if it crashes.
 
 1. run `sudo systemctl daemon-reload`
 1. run `sudo systemctl enable --now web-api`
-1. verify by navigating to <http://rpi20w.local:3000/>
+1. verify by navigating to <http://rpi20w.local:3000/>, and, once the hts site is installed, to
+   <https://rpi20w.local/api/temp-sensor/status> through nginx
 
 > Moving an existing pi off port 80: an older version of this unit had `Environment=PORT=80` and
 > `AmbientCapabilities=CAP_NET_BIND_SERVICE`. Change the first to `PORT=3000`, delete the second,
@@ -208,7 +210,8 @@ References
 
 `hts/` is the frontend, a PWA served by nginx on the pi at <https://rpi20w.local/>. It is built in
 the dev container; the pi only serves the built files, so it needs no node for this. nginx also
-listens on port 80, only to redirect to https. The web-api is on port 3000. [hts/README.md](./hts/README.md) covers the
+listens on port 80, only to redirect to https. It also proxies `/api/` and `/api-docs/` to the
+web-api on port 3000, so the app and the API share one https origin. [hts/README.md](./hts/README.md) covers the
 architecture and the npm scripts.
 
 Every step that touches the pi is done by hand: copy files with `scp`, then `ssh alpha@rpi20w.local`
@@ -262,7 +265,8 @@ and run the commands there. Nothing in the repo connects to the pi for you.
    would clash with the hts site on port 80. The script adds the hts site, creates
    `/var/www/hts/releases` owned by `alpha`, and runs [`pi-status`](#when-the-pi-shows-a-status-page)
    to choose what nginx serves. Until the first release is deployed that is a status page saying
-   so, at <http://rpi20w.local/>. It is safe to re-run.
+   so, at <http://rpi20w.local/>. It is safe to re-run, and re-running it after a `git pull` that
+   changes `hts/deploy/nginx-hts.conf` is how a changed site reaches the pi.
 
    > On a pi flashed before nginx was added to the image, the script stops and says so. Reflash, or
    > run `sudo apt-get install -y nginx && sudo rm -f /etc/nginx/sites-enabled/default` first.

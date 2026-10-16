@@ -102,7 +102,9 @@ nginx on the pi serves the built files over https. Service workers only run in a
 over plain http the app loads but can neither install nor update. `deploy/` has the pi side:
 
 - `nginx-hts.conf`: the site. It redirects http to https, never lets an http cache hold `sw.js`,
-  `index.html` or the manifest, and caches the hashed files in `/assets/` for a year.
+  `index.html` or the manifest, and caches the hashed files in `/assets/` for a year. It proxies
+  `/api/` and `/api-docs/` to the web-api on port 3000, unbuffered so the reading stream's events
+  arrive as they are sent.
 - `setup-pi-hosting.sh`: one-time setup, run on the pi after you ssh in. nginx itself comes with
   the [pi image](../image/README.md).
 
@@ -111,9 +113,12 @@ check serves a status page at <http://rpi20w.local/> saying what is wrong, inste
 to start. See
 [When the pi shows a status page](../README.md#when-the-pi-shows-a-status-page).
 
-The app is at <https://rpi20w.local/>; <http://rpi20w.local/> redirects there. The web-api is on
-port 3000 (see [Running the web-api as a service](../README.md#running-the-web-api-as-a-service)).
-Putting both behind nginx is in the backlog.
+The app is at <https://rpi20w.local/>; <http://rpi20w.local/> redirects there. The web-api is at
+<https://rpi20w.local/api/> through nginx, so the app calls it with relative paths like
+`/api/temp-sensor/stream`: same origin, so no CORS, and https, so no mixed content. The service
+worker leaves `/api/` and `/api-docs/` to the network instead of answering them with the app. The
+web-api itself listens on port 3000 (see
+[Running the web-api as a service](../README.md#running-the-web-api-as-a-service)).
 
 Deploying is done by hand: build and package in the dev container, `scp` the package to the pi,
 then ssh in, unpack it as a release and switch the `current` symlink to it. The steps are in

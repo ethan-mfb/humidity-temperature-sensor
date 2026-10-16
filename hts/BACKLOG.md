@@ -46,17 +46,24 @@ A Product Backlog item is Done, and part of the Increment, only when all of thes
 Found and fixed during the Sprint, by the e2e suite: the manifest was precached twice, which emptied
 the precache, and a tab opened before the app was cached never reloaded onto an accepted update.
 
+## Sprint 2
+
+**Sprint Goal:** hts and the web-api running together on the real pi, behind one https origin.
+
+| #   | Item                                                                                                                                                | Status      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 1   | nginx proxies `/api/` and `/api-docs/` to the web-api; the service worker leaves them alone                                                         | Done        |
+| 2   | Run hosting on the real pi: flash, certificate, `setup-pi-hosting.sh`, deploy, install on a phone and a laptop, and reach the web-api through nginx | In progress |
+
+Item 1 chose the proxy over CORS: hts is served over https, so a browser blocks it from calling the
+web-api over plain http on port 3000 (mixed content). CORS would also have needed TLS on the
+web-api. The proxy and its event stream were tested against nginx and the web-api in the dev
+container; item 2 is the first run on the pi.
+
 ## Product Backlog
 
 In order. Refine items before pulling them into a Sprint.
 
-1. **Run hosting on the real pi.** Build and flash the image (it now includes nginx), issue the
-   certificate, run `setup-pi-hosting.sh`, deploy, and install the app on a phone and a laptop.
-   Nothing in Sprint 1 has run on the pi yet.
-1. **Decide how hts and the web-api share the pi.** nginx serves hts on 80 and 443 and the
-   web-api is on port 3000, so they are different origins. Either nginx proxies `/api` to the
-   web-api (one origin, https for both, no CORS), or the web-api allows CORS from hts. Needed
-   before the next item.
 1. **Show the current reading.** Fetch the latest humidity and temperature from the web-api and
    display them.
 1. **Handle the sensor being unreachable.** Show the last reading and its age when the API fails.
